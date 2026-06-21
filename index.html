@@ -220,6 +220,44 @@ table.list thead th{background:#f0f4f7;color:var(--muted);font-weight:600}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .chip{background:#eef3f5;border-radius:999px;padding:3px 10px;font-size:12px}
 @media(max-width:560px){.kv{grid-template-columns:1fr}.kv div.k{font-weight:600;color:var(--ink)}}
+
+/* ===== declutter: calm defaults + progressive disclosure ===== */
+/* nav: primary buttons + a "More" overflow menu */
+.nav-more{position:relative;display:inline-block}
+.nav-more>.more-btn{border:0;background:none;color:var(--muted);padding:8px 14px;border-radius:8px;font-weight:500;cursor:pointer}
+.nav-more>.more-btn:hover,.nav-more.open>.more-btn{background:#eef2f5;color:var(--ink)}
+.nav-more>.more-btn.hasactive{background:var(--clin-l);color:var(--clin-d)}
+.nav-more .more-menu{display:none;position:absolute;right:0;top:calc(100% + 8px);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(16,42,67,.16);padding:6px;min-width:196px;z-index:50}
+.nav-more.open .more-menu{display:block}
+.nav-more .more-menu button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ink);padding:9px 12px;border-radius:8px;font-weight:500;cursor:pointer;white-space:nowrap}
+.nav-more .more-menu button:hover{background:#eef2f5}
+.nav-more .more-menu button.active{background:var(--clin-l);color:var(--clin-d)}
+@media(max-width:760px){.nav-more .more-menu{right:auto;left:0}}
+
+/* mud map: compact-by-default rows that expand on demand */
+.mm-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-4px 0 14px}
+.mm-toolbar .hint{color:var(--muted);font-size:12px}
+.mm-xa{border:1px solid var(--line);background:#fff;color:var(--clin-d);border-radius:8px;padding:6px 13px;font-size:12.5px;font-weight:600;cursor:pointer}
+.mm-xa:hover{background:#f3f6f8}
+.mm-disc{border:0;background:none;cursor:pointer;font:inherit;font-weight:600;color:#27333d;padding:0;display:inline-flex;align-items:center;gap:9px;text-align:left;line-height:1.3}
+.mm-disc .chev,.mm-sec-tog .chev{display:inline-block;transition:transform .18s ease;color:var(--muted);font-size:10px;width:10px;flex:none}
+.mm-row.mm-open .mm-disc .chev{transform:rotate(90deg)}
+tbody.mm-grp.mm-sec-open .mm-sec-tog .chev{transform:rotate(90deg)}
+.mm-row .mm-full{display:none}
+.mm-row.mm-open .mm-full{display:block;animation:mmfade .18s ease}
+.mm-row.mm-open .mm-sum{display:none}
+.mm-sum{color:#56636f;font-size:12.5px;line-height:1.5;cursor:pointer}
+.mm-sum .mm-lead{font-weight:600;color:#27333d}
+.mm-sum .mm-more{color:var(--muted);font-weight:500}
+.mm-sum .mm-sumact{color:#8a97a2;font-weight:500}
+@keyframes mmfade{from{opacity:.35}to{opacity:1}}
+.mm-sec-tog{border:0;background:none;cursor:pointer;font:inherit;color:var(--clin-d);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.07em;display:inline-flex;align-items:center;gap:9px;padding:0}
+tbody.mm-grp.mm-sec-collapsed tr.mm-row{display:none}
+
+/* generic "show more" disclosure (e.g. dashboard chips) */
+.disc-more{border:0;background:none;color:var(--clin-d);font-weight:600;font-size:12.5px;cursor:pointer;padding:6px 0 0}
+.disc-more:hover{text-decoration:underline}
+.chips.collapsed .chip.xtra{display:none}
 </style>
 </head>
 <body>
@@ -15187,8 +15225,21 @@ const PAGES=[['dashboard','Dashboard'],['mudmap','Mud Map'],['da','DA Desk'],['t
    'alloc' to isAdmin() here if admins should build too (a one-line change). */
 function visiblePages(){return PAGES.filter(([k])=>{ if(k==='admin')return isAdmin(); if(k==='alloc'||k==='da'||k==='roster')return canEditMap(); return true; });}
 function renderNav(){
-  document.getElementById('nav').innerHTML=visiblePages().map(([k,l])=>`<button class="${state.page===k?'active':''}" onclick="go('${k}')">${l}</button>`).join('');
+  const nav=document.getElementById('nav'); if(!nav)return;
+  const vis=visiblePages();
+  const PRIMARY=['dashboard','mudmap','oncall','leave'];
+  const primary=vis.filter(([k])=>PRIMARY.includes(k));
+  const overflow=vis.filter(([k])=>!PRIMARY.includes(k));
+  const curInOverflow=overflow.some(([k])=>k===state.page);
+  let html=primary.map(([k,l])=>`<button class="${state.page===k?'active':''}" onclick="go('${k}')">${l}</button>`).join('');
+  if(overflow.length){
+    html+=`<span class="nav-more" id="navMore"><button class="more-btn${curInOverflow?' hasactive':''}" onclick="toggleMore(event)" aria-haspopup="true" aria-expanded="false">More \u25BE</button>`
+      +`<span class="more-menu">`+overflow.map(([k,l])=>`<button class="${state.page===k?'active':''}" onclick="go('${k}')">${l}</button>`).join('')+`</span></span>`;
+  }
+  nav.innerHTML=html;
 }
+function toggleMore(e){ if(e&&e.stopPropagation)e.stopPropagation(); const m=document.getElementById('navMore'); if(!m)return; m.classList.toggle('open'); const b=m.querySelector('.more-btn'); if(b)b.setAttribute('aria-expanded',m.classList.contains('open')?'true':'false'); }
+document.addEventListener('click',function(e){ const m=document.getElementById('navMore'); if(m&&m.classList.contains('open')&&!m.contains(e.target))m.classList.remove('open'); });
 function renderWho(){
   const who=document.getElementById('who'); if(!who)return;
   if(sbReady()){ // shared mode: identity/role come from Supabase
@@ -16010,7 +16061,8 @@ function renderDash(){
    </div>
    <div class="card pad" style="margin-bottom:16px">
      <div class="row"><h3 style="margin:0">Who's in today</h3><span class="spacer"></span><a onclick="go('staff')">Staff directory →</a></div>
-     <div class="chips" style="margin-top:10px">${peopleToday.length?peopleToday.map(n=>`<span class="chip nm" style="cursor:pointer" onclick="openProfileByName('${esc(n)}')">${esc(n)}</span>`).join(''):'<span class="muted">No elective lists today.</span>'}</div>
+     <div class="chips collapsed" id="whoChips" style="margin-top:10px">${peopleToday.length?peopleToday.map((n,i)=>`<span class="chip nm${i>=10?' xtra':''}" style="cursor:pointer" onclick="openProfileByName('${esc(n)}')">${esc(n)}</span>`).join(''):'<span class="muted">No elective lists today.</span>'}</div>
+     ${peopleToday.length>10?`<button class="disc-more" onclick="(function(b){var c=document.getElementById('whoChips');var col=c.classList.toggle('collapsed');b.textContent=col?('Show all '+${peopleToday.length}+' \u2192'):'Show fewer';})(this)">Show all ${peopleToday.length} \u2192</button>`:''}
    </div>
    <div class="grid2">
      <div>
@@ -16050,16 +16102,46 @@ function mmCell(allocs,mineId){
 }
 /* Render Mud-Map rows grouped under quiet section headers, preserving row order
    within each section. `mineId` highlights the viewer's own line when set. */
-function mmRowsHtml(rows,mineId){
+/* ===== Mud-Map progressive disclosure: compact by default, expand on demand ===== */
+var MM_VIEW_KEY='scgh_mm_view_v1';
+var MM_PRIMARY_SECS={duty:1,theatres:1};   /* sections open by default; the rest start collapsed */
+var MMVIEW=(function(){try{var v=JSON.parse(localStorage.getItem(MM_VIEW_KEY));if(v&&typeof v==='object')return {expandAll:!!v.expandAll,openRows:v.openRows||{},collapsedSecs:v.collapsedSecs||null};}catch(e){}return {expandAll:false,openRows:{},collapsedSecs:null};})();
+function mmSaveView(){try{localStorage.setItem(MM_VIEW_KEY,JSON.stringify(MMVIEW));}catch(e){}}
+function mmSecCollapsed(secId,allow){ if(allow===false)return false; if(MMVIEW.expandAll)return false; if(MMVIEW.collapsedSecs&&MMVIEW.collapsedSecs[secId]!=null)return !!MMVIEW.collapsedSecs[secId]; return !MM_PRIMARY_SECS[secId]; }
+function mmRowOpen(loc){ return MMVIEW.expandAll || !!MMVIEW.openRows[loc]; }
+/* one-line "who's on" summary for a session: lead name + count, else the activity, else dash */
+function mmSessSummary(allocs){
+  var names=[],acts=[];
+  (allocs||[]).forEach(function(a){ if(a.act)acts.push(a.act); (a.staff||[]).forEach(function(st){ if(st.n&&st.n!=='+ more')names.push(st.n); }); });
+  var seen={},uniq=[]; names.forEach(function(n){var k=String(n).toLowerCase(); if(!seen[k]){seen[k]=1;uniq.push(n);} });
+  if(uniq.length)return '<span class="mm-lead">'+esc(uniq[0])+'</span>'+(uniq.length>1?' <span class="mm-more">+'+(uniq.length-1)+'</span>':'');
+  var act=acts.filter(Boolean)[0]; return act?'<span class="mm-sumact">'+esc(act)+'</span>':'<span class="empty">\u2014</span>';
+}
+function mmToggleRow(el){ var tr=el.closest&&el.closest('tr'); if(!tr)return; var loc=tr.getAttribute('data-loc'); var open=tr.classList.toggle('mm-open'); if(loc){ if(open)MMVIEW.openRows[loc]=1; else delete MMVIEW.openRows[loc]; } var b=tr.querySelector('.mm-disc'); if(b)b.setAttribute('aria-expanded',open?'true':'false'); mmSaveView(); }
+function mmToggleSec(el){ var tb=el.closest&&el.closest('tbody'); if(!tb)return; var sec=tb.getAttribute('data-sec'); var nowCollapsed=!tb.classList.contains('mm-sec-collapsed'); tb.classList.toggle('mm-sec-collapsed',nowCollapsed); tb.classList.toggle('mm-sec-open',!nowCollapsed); MMVIEW.collapsedSecs=MMVIEW.collapsedSecs||{}; MMVIEW.collapsedSecs[sec]=nowCollapsed; var b=tb.querySelector('.mm-sec-tog'); if(b)b.setAttribute('aria-expanded',nowCollapsed?'false':'true'); mmSaveView(); }
+function mmExpandAll(){ MMVIEW.expandAll=true; MMVIEW.openRows={}; MMVIEW.collapsedSecs={}; MM_SECTIONS.forEach(function(x){MMVIEW.collapsedSecs[x.id]=false;}); mmSaveView(); render(); }
+function mmCollapseAll(){ MMVIEW.expandAll=false; MMVIEW.openRows={}; MMVIEW.collapsedSecs={}; MM_SECTIONS.forEach(function(x){MMVIEW.collapsedSecs[x.id]=true;}); mmSaveView(); render(); }
+/* Render Mud-Map rows grouped under collapsible section headers; each location is
+   compact (name + lead-at-a-glance) and expands to the full AM/PM detail. The full
+   detail stays in the DOM (just hidden) so nothing is lost and search/a11y still work. */
+function mmRowsHtml(rows,mineId,collapseSecs){
   var groups={};
   rows.forEach(function(r){var sec=mmSection(r.loc);(groups[sec]=groups[sec]||[]).push(r);});
   var html='';
   MM_SECTIONS.forEach(function(sec){var list=groups[sec.id];if(!list||!list.length)return;
-    html+='<tr class="mm-section"><th colspan="3">'+esc(sec.label)+'<span class="mm-count">'+list.length+'</span></th></tr>';
+    var col=mmSecCollapsed(sec.id,collapseSecs);
+    html+='<tbody class="mm-grp '+(col?'mm-sec-collapsed':'mm-sec-open')+'" data-sec="'+sec.id+'">';
+    html+='<tr class="mm-section"><th colspan="3"><button class="mm-sec-tog" onclick="mmToggleSec(this)" aria-expanded="'+(col?'false':'true')+'"><span class="chev">\u25B6</span>'+esc(sec.label)+'<span class="mm-count">'+list.length+'</span></button></th></tr>';
     list.forEach(function(r){
       var quiet=mmQuietRow(r), mine=mineId!=null&&rowHasStaff(r,mineId);
-      html+='<tr class="mm-row'+(quiet?' mm-quiet':'')+(mine?' mm-mine':'')+'"><th>'+esc(r.loc)+'</th><td>'+mmCell(r.am,mineId)+'</td><td>'+mmCell(r.pm,mineId)+'</td></tr>';
+      var open=mmRowOpen(r.loc)||mine;   /* always reveal the viewer's own line */
+      html+='<tr class="mm-row'+(quiet?' mm-quiet':'')+(mine?' mm-mine':'')+(open?' mm-open':'')+'" data-loc="'+esc(r.loc)+'">'
+        +'<th><button class="mm-disc" onclick="mmToggleRow(this)" aria-expanded="'+(open?'true':'false')+'"><span class="chev">\u25B6</span><span>'+esc(r.loc)+'</span></button></th>'
+        +'<td><div class="mm-sum" onclick="mmToggleRow(this)">'+mmSessSummary(r.am)+'</div><div class="mm-full">'+mmCell(r.am,mineId)+'</div></td>'
+        +'<td><div class="mm-sum" onclick="mmToggleRow(this)">'+mmSessSummary(r.pm)+'</div><div class="mm-full">'+mmCell(r.pm,mineId)+'</div></td>'
+        +'</tr>';
     });
+    html+='</tbody>';
   });
   return html;
 }
@@ -16068,7 +16150,7 @@ function renderMap(){
   const onL=onLeaveOn(state.mapDate);
   const everything=canSeeEverything();
   const mineId=myConsultantId();
-  let rowsHtml, scopeNote='';
+  let rowsHtml, scopeNote='', showTools=false;
   if(isWeekend(d)){
     const _oc=oncallFor(d);
     const _ph=isPHrec(ON_CALL_SCHED[iso(d)]);
@@ -16079,7 +16161,7 @@ function renderMap(){
   }else{
     const rows=mapForDate(d);
     if(everything){
-      rowsHtml=mmRowsHtml(rows,everything&&mineId!=null?mineId:null); // full grid; still highlight own line if matched
+      rowsHtml=mmRowsHtml(rows,everything&&mineId!=null?mineId:null,true);showTools=true; // full grid; still highlight own line if matched
     }else if(mineId==null){
       // regular user we can't match to a consultant → friendly empty state
       rowsHtml=`<tr><td colspan="3"><div class="mm-empty"><div class="big">We couldn't match you to a consultant yet</div>Your personal Mud Map shows your own theatre &amp; clinic allocations. Ask an admin to link your account to your consultant record, then your day will appear here.</div></td></tr>`;
@@ -16090,7 +16172,7 @@ function renderMap(){
       if(!mine.length){
         rowsHtml=`<tr><td colspan="3"><div class="mm-empty"><div class="big">Nothing rostered for you on this day</div>${esc(meName)} has no theatre or clinic allocation on ${longDate(d)}. Use Prev / Next to check another day, or see Leave for time off.</div></td></tr>`;
       }else{
-        rowsHtml=mmRowsHtml(mine,mineId);
+        rowsHtml=mmRowsHtml(mine,mineId,false);showTools=true;
       }
       scopeNote=' · <span class="tag con">Your roster</span>';
     }
@@ -16109,11 +16191,16 @@ function renderMap(){
      <span class="spacer"></span>
      <button class="btn ghost" onclick="state.mapDate=iso(TODAY);render()">Today</button>
    </div>
+   ${showTools?`<div class="mm-toolbar">
+       <button class="mm-xa" onclick="mmExpandAll()">Expand all</button>
+       <button class="mm-xa" onclick="mmCollapseAll()">Collapse all</button>
+       <span class="hint">Tap a location to reveal who\u2019s on each session.</span>
+     </div>`:''}
    ${(!everything&&mineId!=null)?`<p class="muted" style="font-size:12px;margin:-4px 0 12px">Showing <b>your</b> allocations. Duty Anaesthetists and admins see the full department map.</p>`:''}
    ${onL.length&&everything?`<div class="banner"><b>On leave this day:</b> ${onL.map(l=>esc(byId(l.staffId).full)+' ('+l.type.replace(' Leave','')+')').join(' · ')}</div>`:''}
    <div class="card" style="overflow:auto"><table class="mm">
      <thead><tr><th>Location</th><th>AM</th><th>PM</th></tr></thead>
-     <tbody>${rowsHtml}</tbody>
+     ${rowsHtml.indexOf('<tbody')===0?rowsHtml:'<tbody>'+rowsHtml+'</tbody>'}
    </table></div>`;
 }
 function shiftMap(n){let d=addDays(fromIso(state.mapDate),n);while(isWeekend(d))d=addDays(d,n>0?1:-1);state.mapDate=iso(d);render();}
