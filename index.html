@@ -232,6 +232,7 @@ table.list thead th{background:#f0f4f7;color:var(--muted);font-weight:600}
   <div class="who" id="who"></div>
   <button id="srchBtn" class="srchbtn" aria-label="Search people, theatres and lists" title="Search (press /)" onclick="openSearch()">🔎 <span class="srchbtn-t">Search</span> <kbd>/</kbd></button>
 </div></header>
+<div id="tmBar" style="display:none"></div>
 <main class="wrap" id="view" role="main" tabindex="-1"></main>
 <div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeProfile()"><div class="modal" id="modalBox" role="dialog" aria-modal="true"></div></div>
 <div class="notice" id="toast" role="status"></div>
@@ -14975,6 +14976,7 @@ function daUnpublish(ds){if(!canEditMap()){toast('Mud Map editing is for Duty An
    guard is server-side (can_publish_map() RLS + set_member_duty RPC); this UI gating
    sits on top. ===== */
 function isDuty(){
+  if(TESTMODE)return !!TESTMODE.isDA||TESTMODE.role==='super'; // TEST MODE: persona DA flag (super always)
   if(sbReady())return !!(SB_MEMBER&&SB_MEMBER.active&&SB_MEMBER.is_duty); // server-authoritative
   // offline localStorage fallback: account-level DA flag, linked-staff 'da' credential,
   // or the consultant is in the DA_SEED derived from the last year of Mud Maps.
@@ -14997,6 +14999,7 @@ function canSeeEverything(){
 /* Match the signed-in member to their own consultant record, by linked staff id,
    then by name, then by email local-part. Returns a staff id or null. */
 function myConsultantId(){
+  if(TESTMODE)return TESTMODE.staffId!=null?TESTMODE.staffId:null; // TEST MODE: persona's matched consultant (or none)
   if(sbReady()&&SB_MEMBER){
     if(SB_MEMBER.staff_id!=null)return SB_MEMBER.staff_id;
     var byName=sbMatch(SB_MEMBER.name); if(byName!=null)return byName;
@@ -15206,6 +15209,7 @@ function esc(s){return (''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'
 function render(){
   _render();
   try{ if(typeof a11yEnhance==='function') a11yEnhance(); }catch(e){}
+  try{ renderTmBar(); }catch(e){}
 }
 function _render(){
   if(state.page==='dashboard')return renderDash();
@@ -15258,6 +15262,7 @@ function renderAdmin(){
   const cons=CONSULTANTS.filter(s=>s.full.toLowerCase().includes(q)).sort((a,b)=>a.last.localeCompare(b.last));
   const counts=Object.keys(CRED_LABEL).map(t=>`${CRED_LABEL[t]}: <b>${(CREDS[t]||[]).length}</b>`).join(' · ');
   view.innerHTML=`<h1>Admin</h1>
+   ${tmAdminPanel()}
    <div class="card pad" style="margin-bottom:18px">
      <div class="row"><h3 style="margin:0">Shared mode — live database</h3><span class="spacer"></span><span class="tag ${sbReady()?'con':'leave'}">${sbReady()?('Connected · '+esc(SB_USER.email||'signed in')+(sbRole()?(' · '+roleLabel(sbRole())):' · no role yet')):(sbOn()?'Connected — sign in to share':'Off · per-browser')}</span></div>
      <p class="muted" style="font-size:12px;margin:8px 0">Turn this on to share leave, availability <b>and accounts/roles</b> across everyone via the department Supabase database. ${sbReady()?'Leave/availability and the invite/role system now read &amp; write the shared database — roles are enforced server-side.':'Paste the project anon key, then sign in with your work email (magic link).'}</p>
@@ -16494,11 +16499,160 @@ function loadAccounts(){try{const a=JSON.parse(localStorage.getItem(ACC_KEY));if
 let ACCOUNTS=loadAccounts();
 function saveAccounts(){localStorage.setItem(ACC_KEY,JSON.stringify(ACCOUNTS));}
 let SESSION=null;(function(){try{const u=localStorage.getItem(SES_KEY);if(u)SESSION=ACCOUNTS.find(a=>a.username===u&&a.status==='active')||null;}catch(e){}})();
+/* ============================================================
+   SUPER-ONLY TEST MODE / "View as" persona switcher
+   ------------------------------------------------------------
+   A genuine super-admin can preview the app AS any account FORMAT
+   without creating real email logins. PURE CLIENT-SIDE: it only
+   overrides the client capability checks (isAdmin/isSuper/isDuty/
+   canEditMap/canSeeEverything/myConsultantId/myRank) so the WHOLE UI
+   behaves like the chosen persona — nav, Mud Map (personal vs full),
+   Roster Builder/DA Desk visibility, member management, headers and
+   gating all follow suit. It writes NOTHING to Supabase and creates
+   no real accounts.
+   HONESTY: the real signed-in identity is still the super, so any
+   actual Supabase write still runs with super privileges server-side.
+   This is a faithful UI / permission-gating PREVIEW of each format's
+   experience — it does NOT exercise server-side RLS rejection.
+   ============================================================ */
+var TESTMODE=null;   // null = real identity; else the active persona object
+var TM_SAMPLES=[];   // in-memory sample members (test mode only — never persisted)
+/* The genuine, server-verified super identity. NEVER consults TESTMODE,
+   so a persona can never be used to enter or escalate test mode. */
+function tmRealIsSuper(){
+  if(SB&&SB_USER)return !!(SB_MEMBER&&SB_MEMBER.active&&SB_MEMBER.role==='super');
+  return !!(SESSION&&SESSION.role==='super');
+}
+function tmActive(){return !!TESTMODE;}
+/* Resolve a real consultant id that IS a DA (wantDA) or is NOT a DA. */
+function tmPickConsultant(wantDA){
+  var list=(typeof CONSULTANTS!=='undefined'&&CONSULTANTS.length)?CONSULTANTS:STAFF;
+  var hit=list.find(function(c){return wantDA?isDutyStaff(c.id):(!isDutyStaff(c.id)&&!hasCred(c.id,'da'));});
+  return hit?hit.id:null;
+}
+/* The set of personas the super can step into. Capability flags are derived
+   from these by the (overridden) capability functions above. */
+function tmPersonas(){
+  var daId=tmPickConsultant(true), nonDaId=tmPickConsultant(false);
+  var daName=(byId(daId)||{}).full, nonName=(byId(nonDaId)||{}).full;
+  return [
+   {key:'user_da',       role:'user',  isDA:true,  staffId:daId,
+     label:'Regular user — DA consultant'+(daName?' ('+daName+')':''),
+     blurb:'A plain user matched to a real consultant who IS a Duty Anaesthetist: personal sign-in plus the DA editing affordances (DA Desk / Roster Builder).'},
+   {key:'user_nonda',    role:'user',  isDA:false, staffId:nonDaId,
+     label:'Regular user — non-DA consultant'+(nonName?' ('+nonName+')':''),
+     blurb:'A plain user matched to a real consultant who is NOT a DA: personalised "your roster" Mud Map, view-only.'},
+   {key:'user_unmatched',role:'user',  isDA:false, staffId:null,
+     label:'Regular user — unmatched',
+     blurb:'A plain user with no consultant match: friendly empty state on the personal Mud Map.'},
+   {key:'admin',         role:'admin', isDA:false, staffId:null,
+     label:'Admin (not a DA)',
+     blurb:'Sees everything and manages members, but NO Roster Builder (map editing is DA + super only).'},
+   {key:'admin_da',      role:'admin', isDA:true,  staffId:daId,
+     label:'Admin + DA',
+     blurb:'Sees everything, manages members AND has the Roster Builder / DA Desk.'},
+   {key:'da_only',       role:'user',  isDA:true,  staffId:null,
+     label:'DA only (user + DA flag)',
+     blurb:'A Duty Anaesthetist who is not an admin: has the builder and the full department map, but no member management.'},
+   {key:'super',         role:'super', isDA:true,  staffId:null,
+     label:'Super-admin (full)',
+     blurb:'The real default — full access to everything.'}
+  ];
+}
+function tmPersonaByKey(k){return tmPersonas().find(function(p){return p.key===k;})||null;}
+/* Enter test mode AS a persona. Hard-gated on the genuine super identity. */
+function enterTestMode(key){
+  if(!tmRealIsSuper()){toast('Test mode is for super-admins only.',true);return false;}
+  var p=tmPersonaByKey(key); if(!p){toast('Unknown persona.',true);return false;}
+  TESTMODE=p;
+  tmBuildSamples();                         // fresh in-memory sample members
+  if(p.staffId!=null)CURRENT=p.staffId;     // act-as the persona's consultant where matched
+  state.page='dashboard';
+  toast('TEST MODE on — viewing as '+p.label+'.');
+  boot();
+  return true;
+}
+/* Leave test mode and restore the real super identity. Samples vanish. */
+function exitTestMode(){
+  TESTMODE=null; TM_SAMPLES=[];
+  var real=myConsultantId(); if(real!=null)CURRENT=real;
+  state.page='admin';
+  toast('Test mode off — restored your super-admin identity.');
+  boot();
+  return true;
+}
+/* In-memory sample members spanning the formats. NEVER written to Supabase. */
+function tmBuildSamples(){
+  TM_SAMPLES=[
+    {id:'tm-s1',name:'Sample User',         email:'sample.user@example.test',    role:'user',  is_duty:false},
+    {id:'tm-s2',name:'Sample DA (user+DA)', email:'sample.da@example.test',      role:'user',  is_duty:true },
+    {id:'tm-s3',name:'Sample Admin',        email:'sample.admin@example.test',   role:'admin', is_duty:false},
+    {id:'tm-s4',name:'Sample Admin + DA',   email:'sample.adminda@example.test', role:'admin', is_duty:true },
+    {id:'tm-s5',name:'Sample Super-admin',  email:'sample.super@example.test',   role:'super', is_duty:true }
+  ];
+}
+function tmSample(id){return TM_SAMPLES.find(function(m){return m.id===id;});}
+function tmSetSampleRole(id,role){var m=tmSample(id);if(!m)return;
+  if((ROLE_RANK[role]||1)>myRank()){toast('You can’t promote above your own tier.',true);return;}
+  if(role==='super'&&!isSuper()){toast('Only a super-admin can grant super-admin.',true);return;}
+  m.role=role;toast('(sample) role set to '+roleLabel(role)+' — in-memory only, nothing saved.');render();}
+function tmSetSampleDuty(id,on){var m=tmSample(id);if(!m)return;
+  m.is_duty=!!on;toast('(sample) Duty Anaesthetist '+(on?'granted':'removed')+' — in-memory only.');render();}
+function tmRevokeSample(id){var i=TM_SAMPLES.findIndex(function(m){return m.id===id;});if(i<0)return;
+  TM_SAMPLES.splice(i,1);toast('(sample) member removed — in-memory only.');render();}
+function tmIssueSampleInvite(){var code=(typeof genCode==='function')?genCode():'SAMPLE0';
+  toast('(sample) invite code '+code+' — in-memory only, nothing saved to the backend.');}
+/* The persistent TEST MODE banner (rendered into #tmBar on every render). */
+function renderTmBar(){
+  var el=document.getElementById('tmBar'); if(!el)return;
+  if(!TESTMODE){el.style.display='none';el.innerHTML='';return;}
+  el.style.cssText='display:block;position:sticky;top:0;z-index:9999;background:repeating-linear-gradient(45deg,#b3261e,#b3261e 14px,#9c1f18 14px,#9c1f18 28px);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.28)';
+  var opts=tmPersonas().map(function(p){return '<option value="'+p.key+'"'+(p.key===TESTMODE.key?' selected':'')+'>'+esc(p.label)+'</option>';}).join('');
+  el.innerHTML='<div class="wrap" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 16px;font-size:13px">'
+    +'<b style="letter-spacing:.5px">⚠ TEST MODE</b>'
+    +'<span>viewing as <b>'+esc(TESTMODE.label)+'</b></span>'
+    +'<span title="This is a faithful UI / permission preview. You are really still signed in as the super-admin, so any actual Supabase write still runs with super privileges server-side — it tests each format’s experience and client-side gating, NOT server-side RLS rejection. Sample members are in-memory only and are never saved." style="cursor:help;text-decoration:underline dotted;opacity:.92">ⓘ what this does</span>'
+    +'<span style="flex:1 1 40px"></span>'
+    +'<label style="opacity:.92">Switch persona: </label>'
+    +'<select onchange="enterTestMode(this.value)" style="font-size:12px;padding:3px 6px;border-radius:6px;border:0">'+opts+'</select>'
+    +'<button onclick="exitTestMode()" style="font-size:12px;font-weight:700;padding:5px 12px;border-radius:6px;border:0;background:#fff;color:#b3261e;cursor:pointer">Exit test mode</button>'
+    +'</div>';
+}
+/* Super-only Test mode entry panel + sample-member sandbox (rendered atop Admin). */
+function tmAdminPanel(){
+  if(!tmRealIsSuper())return '';   // super-only — genuine super identity required
+  var ps=tmPersonas();
+  var entry='<div class="card pad" style="margin-bottom:18px;border:2px solid #b3261e">'
+   +'<div class="row"><h3 style="margin:0">🧪 Test mode — view as any account format <span class="muted" style="font-size:12px">(super-only)</span></h3>'
+   +'<span class="spacer"></span>'+(TESTMODE?'<button class="btn" style="background:#b3261e" onclick="exitTestMode()">Exit test mode</button>':'')+'</div>'
+   +'<p class="muted" style="font-size:12px;margin:8px 0">Preview the app exactly as each account format experiences it — nav items, the Mud Map (personal vs full), Roster Builder / DA Desk visibility, member management, headers and gating all switch to match the persona. '
+   +'<b>This is a faithful UI / permission preview only.</b> You stay signed in as the super-admin, so any real Supabase write still runs with super privileges server-side — it tests each format’s experience &amp; client-side gating, not server-side RLS rejection. No real accounts are created and nothing is written to the backend.</p>'
+   +'<div class="row" style="gap:8px;flex-wrap:wrap">'+ps.map(function(p){var on=TESTMODE&&TESTMODE.key===p.key;return '<button class="btn '+(on?'':'ghost')+'" title="'+esc(p.blurb)+'" onclick="enterTestMode(\''+p.key+'\')">'+(on?'● ':'')+esc(p.label)+'</button>';}).join('')+'</div>'
+   +(TESTMODE?'<p class="muted" style="font-size:12px;margin-top:8px">Currently viewing as <b>'+esc(TESTMODE.label)+'</b>. '+esc(TESTMODE.blurb)+'</p>':'')
+   +'</div>';
+  return entry+tmSamplesCard();
+}
+function tmSamplesCard(){
+  if(!TESTMODE||!isAdmin())return '';
+  var rows=TM_SAMPLES.map(function(m){
+    var canManage=(ROLE_RANK[m.role]||1)<=myRank();
+    var roleCell=canManage?'<select class="search" style="font-size:12px;padding:4px 6px" onchange="tmSetSampleRole(\''+m.id+'\',this.value)"><option value="user"'+(m.role==='user'?' selected':'')+'>User</option><option value="admin"'+(m.role==='admin'?' selected':'')+'>Admin</option>'+(isSuper()?'<option value="super"'+(m.role==='super'?' selected':'')+'>Super-admin</option>':'')+'</select>':'<span class="tag con">'+roleLabel(m.role)+'</span>';
+    var daOn=!!m.is_duty||m.role==='super';
+    var daCell='<input type="checkbox" '+(m.is_duty?'checked':'')+' onclick="tmSetSampleDuty(\''+m.id+'\',this.checked)"> '+(daOn?'<span class="tag leave">DA</span>':'');
+    return '<tr><td>'+esc(m.name)+'</td><td>'+esc(m.email)+'</td><td>'+roleCell+'</td><td style="text-align:center">'+daCell+'</td><td style="text-align:right">'+(canManage?'<a onclick="tmRevokeSample(\''+m.id+'\')">remove</a>':'<span class="muted">—</span>')+'</td></tr>';
+  }).join('');
+  return '<div class="card pad" style="margin-bottom:18px;border:1px dashed #b3261e">'
+   +'<div class="row"><h3 style="margin:0">SAMPLE members <span class="muted" style="font-size:12px">(test mode · in-memory · never saved)</span></h3><span class="spacer"></span><span class="muted">'+TM_SAMPLES.length+' samples</span></div>'
+   +'<p class="muted" style="font-size:12px;margin:8px 0">Fake, in-memory members so you can exercise the management controls (promote/demote, toggle DA, revoke, issue code) safely. They are <b>not</b> in the Supabase members table and vanish when you exit test mode.</p>'
+   +'<table class="list"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th style="text-align:center">Duty Anaes</th><th style="text-align:right">Manage</th></tr></thead><tbody>'+rows+'</tbody></table>'
+   +'<div class="row" style="margin-top:10px"><button class="btn ghost" onclick="tmIssueSampleInvite()">Issue sample invite code</button></div>'
+   +'</div>';
+}
 /* When shared mode is live, role comes from the database (server-authoritative);
    otherwise fall back to the per-browser localStorage session. */
-function isSuper(){if(sbReady())return sbRole()==='super';return !!(SESSION&&SESSION.role==='super');}
-function isAdmin(){if(sbReady())return sbRole()==='admin'||sbRole()==='super';return !!(SESSION&&(SESSION.role==='admin'||SESSION.role==='super'));}
-function myRank(){if(sbReady())return ROLE_RANK[sbRole()]||0;return SESSION?(ROLE_RANK[SESSION.role]||1):0;}
+function isSuper(){if(TESTMODE)return TESTMODE.role==='super';if(sbReady())return sbRole()==='super';return !!(SESSION&&SESSION.role==='super');}
+function isAdmin(){if(TESTMODE)return TESTMODE.role==='admin'||TESTMODE.role==='super';if(sbReady())return sbRole()==='admin'||sbRole()==='super';return !!(SESSION&&(SESSION.role==='admin'||SESSION.role==='super'));}
+function myRank(){if(TESTMODE)return ROLE_RANK[TESTMODE.role]||0;if(sbReady())return ROLE_RANK[sbRole()]||0;return SESSION?(ROLE_RANK[SESSION.role]||1):0;}
 /* central authorization guard — every privileged action is checked here, never by hidden UI alone */
 function requireRank(min,msg){ if(myRank()<min){toast(msg||'You do not have permission for that.',true);return false;} return true; }
 function firstRunSuper(){return ACCOUNTS.find(a=>a.role==='super'&&a.mustSetPassword&&a.status==='active')||null;}
