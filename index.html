@@ -58,21 +58,54 @@ input,select{font:inherit}
 .swatch{display:inline-block;width:10px;height:10px;border-radius:3px;flex:none}
 .dot{color:var(--good)}
 
-/* mudmap */
-.mm{width:100%;border-collapse:collapse;font-size:13px}
-.mm th,.mm td{border-bottom:1px solid var(--line);text-align:left;vertical-align:top;padding:9px 12px}
-.mm thead th{background:#f0f4f7;color:var(--muted);font-weight:600}
+/* ===== mudmap — calm, scannable grid (redesigned) =====
+   Goals: aligned columns, clear hierarchy (location > activity > people),
+   hairline separators + zebra shading instead of heavy borders, quiet
+   section headers, and muted empty / CLOSED cells so the eye lands on the
+   real allocations. Tuned to stay legible on mobile too. */
+.mm{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+.mm th,.mm td{border-bottom:1px solid var(--line);text-align:left;vertical-align:top;padding:10px 14px}
+.mm thead th{background:#eef3f6;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;position:sticky;top:0;z-index:1}
 .mm thead th:first-child{border-top-left-radius:10px}
 .mm thead th:last-child{border-top-right-radius:10px}
-.mm tbody th{font-weight:600;color:#33424f;width:170px}
-.mm tr:hover td{background:#fafcfd}
-.alloc{margin-bottom:8px}
+.mm thead th+th{width:38%}
+.mm tbody th{font-weight:600;color:#27333d;width:188px;line-height:1.3}
+/* zebra shading by location row (skips section + closed rows) */
+.mm tbody tr.mm-row:nth-of-type(even) td,.mm tbody tr.mm-row:nth-of-type(even) th{background:#fafcfd}
+.mm tbody tr.mm-row:hover td,.mm tbody tr.mm-row:hover th{background:var(--clin-l)}
+/* quiet section headers group related locations */
+.mm tbody tr.mm-section th{background:transparent;border-bottom:1px solid var(--line);
+  padding:16px 14px 6px;color:var(--clin-d);font-weight:700;font-size:11px;
+  text-transform:uppercase;letter-spacing:.07em}
+.mm tbody tr.mm-section:first-child th{padding-top:6px}
+.mm-section .mm-count{display:inline-block;margin-left:6px;color:var(--muted);font-weight:600;
+  background:#eef3f6;border-radius:999px;padding:0 7px;font-size:10px;letter-spacing:0}
+/* de-emphasise empty / THEATRE CLOSED / NO LIST BOOKED rows */
+.mm tbody tr.mm-quiet th{color:#9aa7b2;font-weight:500}
+.mm tbody tr.mm-quiet td{color:#aab4bd}
+.mm tbody tr.mm-quiet:hover td,.mm tbody tr.mm-quiet:hover th{background:#fafbfc}
+/* highlight the viewer's own line in the personalised view */
+.mm tbody tr.mm-mine th{box-shadow:inset 3px 0 0 var(--clin)}
+.mm tbody tr.mm-mine td,.mm tbody tr.mm-mine th{background:var(--clin-l)!important}
+.alloc{margin-bottom:9px}
 .alloc:last-child{margin:0}
-.alloc .act{display:flex;align-items:center;gap:7px;font-weight:600}
+.alloc .act{display:flex;align-items:center;gap:8px;font-weight:600;color:#27333d}
+.alloc .act .swatch{width:9px;height:9px;border-radius:2px}
 .alloc .act.closed{color:#9aa7b2;font-weight:500}
-.alloc .stf{padding-left:17px;color:#4a5a68}
-.alloc .stf .gr{font-style:italic;color:#90a0ad}
+.alloc .stf{padding-left:17px;color:#46535f;line-height:1.5}
+.alloc .stf .nm{cursor:pointer}
+.alloc .stf .nm:hover{color:var(--clin);text-decoration:underline}
+.alloc .stf .gr{font-style:normal;color:#9aa7b2;font-size:11px;font-weight:500}
+.alloc .stf.mine .nm{font-weight:700;color:var(--clin-d)}
 .empty{color:#c7d0d8}
+/* personalised empty-state card */
+.mm-empty{text-align:center;padding:42px 20px;color:var(--muted)}
+.mm-empty .big{font-size:15px;color:var(--ink);font-weight:600;margin-bottom:6px}
+@media(max-width:760px){
+  .mm thead th+th{width:auto}
+  .mm tbody th{width:120px}
+  .mm th,.mm td{padding:8px 9px}
+}
 
 /* leave calendar */
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
@@ -14824,9 +14857,21 @@ const AREAS=[
 ];
 
 /* ===================== week A/B/C/D rotating cycle ===================== */
+/* ┌─────────────────────────  WEEK-LETTER CONFIG  ─────────────────────────┐
+   │ The department runs a 4-week rotating cycle labelled Week A / B / C / D.│
+   │ WEEK_ANCHOR is the single source of truth: the Monday of a week whose   │
+   │ letter we KNOW, and WEEK_LETTERS lists the cycle starting at that anchor.│
+   │ To correct the labelling, change ONLY these two constants.              │
+   │                                                                         │
+   │ CONFIRMED against the live site https://anaesthesia.scgh.com.au on      │
+   │ Sun 21 Jun 2026, whose Mud Map header reads "…Jun 21, 2026 - W C".      │
+   │ Mon of that week = 15 Jun 2026, so WEEK_ANCHOR (Mon 15 Jun) = Week C.    │
+   │ Independently corroborated by Ed's real T3 workbook (5 Aug 2026 = Week  │
+   │ B, 12 Aug = C, 19 Aug = D, 26 Aug = A) — all consistent with this anchor.│
+   └─────────────────────────────────────────────────────────────────────────┘ */
 function mondayOf(d){const x=new Date(d);x.setDate(x.getDate()-((x.getDay()+6)%7));x.setHours(0,0,0,0);return x;}
-const WEEK_ANCHOR=new Date(2026,5,15);       // Mon 15 Jun 2026 = Week C (from the live SCGH map)
-const WEEK_LETTERS=['C','D','A','B'];
+const WEEK_ANCHOR=new Date(2026,5,15);       // Mon 15 Jun 2026 = Week C  (confirmed vs live SCGH map)
+const WEEK_LETTERS=['C','D','A','B'];        // cycle order starting at the anchor week
 function weekLetter(d){const wk=Math.round((mondayOf(d)-WEEK_ANCHOR)/6048e5);return WEEK_LETTERS[((wk%4)+4)%4];}
 
 /* ===================== sub-specialty credentialing ===================== */
@@ -14938,6 +14983,68 @@ function isDuty(){
 function canEditMap(){return isSuper()||isDuty();}
 /* DA Desk visibility & Mud-Map publishing use the same capability. Kept as canDA() for back-compat. */
 function canDA(){return canEditMap();}
+
+/* ===== personalised vs "see-everything" Mud Map =====
+   ASSUMPTION (flagged): a regular signed-in user sees only THEIR OWN line on the
+   Mud Map — i.e. the allocations of the consultant they are matched to. Super-admins,
+   admins and Duty Anaesthetists "see everything" (the full department grid). If a
+   regular user can't be matched to a consultant, they get a friendly empty state. */
+function isLoggedIn(){return sbReady()||!!SESSION;}
+function canSeeEverything(){
+  if(!isLoggedIn())return true;          // unauthenticated (e.g. test harness) → full map
+  return isAdmin()||isDuty();            // super + admin + DA see the whole department
+}
+/* Match the signed-in member to their own consultant record, by linked staff id,
+   then by name, then by email local-part. Returns a staff id or null. */
+function myConsultantId(){
+  if(sbReady()&&SB_MEMBER){
+    if(SB_MEMBER.staff_id!=null)return SB_MEMBER.staff_id;
+    var byName=sbMatch(SB_MEMBER.name); if(byName!=null)return byName;
+    var em=String(SB_MEMBER.email||'').toLowerCase().split('@')[0];
+    if(em){var s=STAFF.find(function(x){return x.last&&em.indexOf(String(x.last).toLowerCase())>=0;});if(s)return s.id;}
+    return null;
+  }
+  if(SESSION&&SESSION.staffId!=null)return SESSION.staffId;
+  return null;
+}
+/* Does this Mud-Map row place the given staff member (by id or surname) in AM or PM? */
+function rowHasStaff(r,id){var s=byId(id);if(!s)return false;var ln=String(s.last).toLowerCase();
+  return ['am','pm'].some(function(sh){return (r[sh]||[]).some(function(a){return (a.staff||[]).some(function(st){return st.id===id||String(st.n).toLowerCase()===ln;});});});}
+
+/* ===== Mud-Map sections — quiet headers that group related locations ===== */
+var MM_SECTIONS=[
+  {id:'duty',      label:'Duty & coordination'},
+  {id:'theatres',  label:'Main theatres'},
+  {id:'procedural',label:'Procedural & imaging'},
+  {id:'offsite',   label:'Offsite'},
+  {id:'clinics',   label:'Pain, clinics & periop'},
+  {id:'juniors',   label:'ICU & junior staff'},
+  {id:'other',     label:'Other areas'}
+];
+function mmSection(loc){var x=String(loc||'');
+  if(/Duty|On.?Call/i.test(x))return 'duty';
+  if(/^Theatre\b|Dolphin/i.test(x))return 'theatres';
+  if(/Cath ?Lab|MRI|ECT|ERCP|Endoscopy|G75/i.test(x))return 'procedural';
+  if(/Osborne|OPH|NIISWA/i.test(x))return 'offsite';
+  if(/APS|Pain|Allergy|Periop|Pre ?Admission|APOP|Clinic/i.test(x))return 'clinics';
+  if(/ICU|RMO|Intern/i.test(x))return 'juniors';
+  return 'other';}
+/* A row is "quiet" (de-emphasised) when it carries no real allocation either session. */
+function mmQuietRow(r){var noStaff=function(sh){return !(r[sh]||[]).some(function(a){return (a.staff||[]).length;});};
+  var closed=['am','pm'].every(function(sh){return (r[sh]||[]).every(function(a){return /CLOSED|NO LIST/i.test(a.act||'');});});
+  return closed||(noStaff('am')&&noStaff('pm'));}
+
+/* Which term does a date fall in? Header always shows a term; dates outside the
+   defined terms are labelled with the nearest upcoming / most recent one. */
+function termForDate(d){var t=iso(d);
+  var inside=TERMS.find(function(x){return x.start<=t&&t<=x.end;});
+  if(inside)return {name:inside.name,note:'',term:inside};
+  var up=TERMS.filter(function(x){return x.start>t;}).sort(function(a,b){return a.start<b.start?-1:1;})[0];
+  if(up)return {name:up.name,note:'starts '+longDate(fromIso(up.start)).replace(/^\w+,\s*/,''),term:up};
+  var past=TERMS.filter(function(x){return x.end<t;}).sort(function(a,b){return a.end>b.end?-1:1;})[0];
+  if(past)return {name:past.name,note:'ended '+longDate(fromIso(past.end)).replace(/^\w+,\s*/,''),term:past};
+  return {name:'Term TBC',note:'',term:null};}
+
 function mapForDate(d){const ds=iso(d);if(PUB[ds]&&PUB[ds].rows&&PUB[ds].rows.length)return PUB[ds].rows;return mapGen(d);}
 function mapGen(d){
   if(REAL_DAYS[iso(d)]) return applyOverrides(REAL_DAYS[iso(d)], iso(d));
@@ -15070,7 +15177,12 @@ let state={page:'dashboard', mapDate:iso(TODAY), calMonth:TODAY.getMonth(), calY
 function toast(msg,bad){const t=document.getElementById('toast');t.textContent=msg;t.className='notice show'+(bad?' bad':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='notice',3200);}
 
 const PAGES=[['dashboard','Dashboard'],['mudmap','Mud Map'],['da','DA Desk'],['theatre','By Theatre'],['person','By Person'],['oncall','On Call'],['leave','Leave'],['roster','Roster Builder'],['reports','Reports'],['messages','Messages'],['doctors','Our Doctors'],['staff','Staff'],['alloc','Allocations'],['admin','Admin'],['account','My Account']];
-function visiblePages(){return PAGES.filter(([k])=>{ if(k==='admin')return isAdmin(); if(k==='alloc'||k==='da')return canEditMap(); return true; });}
+/* Page visibility. The Roster Builder, DA Desk and Allocations all EDIT the roster,
+   so they are gated to map editors only = Duty Anaesthetists + super (canEditMap()).
+   ASSUMPTION (flagged): an admin who is NOT a DA can see everything but cannot use
+   the builder — consistent with map-editing being DA+super only. Flip 'roster'/'da'/
+   'alloc' to isAdmin() here if admins should build too (a one-line change). */
+function visiblePages(){return PAGES.filter(([k])=>{ if(k==='admin')return isAdmin(); if(k==='alloc'||k==='da'||k==='roster')return canEditMap(); return true; });}
 function renderNav(){
   document.getElementById('nav').innerHTML=visiblePages().map(([k,l])=>`<button class="${state.page===k?'active':''}" onclick="go('${k}')">${l}</button>`).join('');
 }
@@ -15087,7 +15199,7 @@ function renderWho(){
   who.innerHTML=`${act}<span class="tag ${isAdmin()?'leave':'con'}">${roleLabel(SESSION.role)}</span> <span style="margin:0 8px">${esc(SESSION.name||SESSION.username)}</span> <button class="btn ghost" style="padding:5px 11px" onclick="logout()">Log out</button>`;
   if(isAdmin()){const sel=document.getElementById('userSel');sel.innerHTML=activeStaff().slice().sort((a,b)=>a.last.localeCompare(b.last)).map(s=>`<option value="${s.id}" ${s.id===CURRENT?'selected':''}>${s.full}</option>`).join('');sel.onchange=e=>{CURRENT=+e.target.value;localStorage.setItem(UKEY,CURRENT);render();};}
 }
-function go(p){if(p==='admin'&&!isAdmin()){toast('Admins only.',true);return;}if((p==='alloc'||p==='da')&&!canEditMap()){toast('Mud Map editing is for Duty Anaesthetists (or super-admins) only.',true);return;}state.page=p;renderNav();render();window.scrollTo(0,0);}
+function go(p){if(p==='admin'&&!isAdmin()){toast('Admins only.',true);return;}if((p==='alloc'||p==='da'||p==='roster')&&!canEditMap()){toast('The roster builder is for Duty Anaesthetists (or super-admins) only.',true);return;}state.page=p;renderNav();render();window.scrollTo(0,0);}
 
 function esc(s){return (''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 
@@ -15294,8 +15406,8 @@ function renderRoster(){
     return `<tr${n===nk?' style="outline:2px solid var(--clin);outline-offset:-2px"':''}><th style="white-space:nowrap">${esc(n)} ${fte?`<span class="muted" style="font-weight:400">FTE ${fte}</span>`:''}</th>${cells}</tr>`;
   }).join('');
   const legend=Object.entries(RCODE).filter(([k])=>k&&k!=='AR'&&k!=='CR'&&k!=='0').map(([k,v])=>`<span class="chip" style="background:${v.bg};color:${v.fg}">${k} · ${v.l}</span>`).join(' ');
-  view.innerHTML=`<h1>Roster Builder</h1>
-   <p class="sub">Plan and collect availability by term — ${people.length} consultants · ${days.length} weekdays.</p>
+  view.innerHTML=`<h1>Roster Builder <span class="tag leave">Duty Anaes / super</span></h1>
+   <p class="sub">Build &amp; publish the roster <b>one term at a time</b> — pick a term below, then collect availability and draft allocations for <b>${esc(term.name)}</b>. ${people.length} consultants · ${days.length} weekdays.</p>
    <div class="row" style="margin-bottom:12px">
      <select class="search" onchange="state.term=this.value;state.rPage=0;render()">${TERMS.map(t=>`<option value="${t.id}" ${t.id===term.id?'selected':''}>${esc(t.name)}${t.open?'':' (closed)'}</option>`).join('')}</select>
      <span class="tag ${term.open?'con':'leave'}">${term.open?'Requests OPEN':'Requests closed'}</span>
@@ -15919,10 +16031,39 @@ function renderDash(){
 }
 
 /* ---- mud map ---- */
+/* One Mud-Map cell (AM or PM). `mineId` (optional) bolds the viewer's own name. */
+function mmCell(allocs,mineId){
+  var mineLast=mineId!=null&&byId(mineId)?String(byId(mineId).last).toLowerCase():null;
+  return (allocs||[]).map(function(a){
+    var closed=/CLOSED|NO LIST/i.test(a.act||'');
+    var staff=(a.staff||[]).map(function(s){
+      var mine=mineLast&&(s.id===mineId||String(s.n).toLowerCase()===mineLast);
+      return '<div class="stf'+(mine?' mine':'')+'"><span class="nm" tabindex="-1" onclick="openProfileByName(\''+esc(s.n)+'\')">'+esc(s.n)+'</span> <span class="gr">'+esc(s.g)+'</span></div>';
+    }).join('');
+    return '<div class="alloc"><div class="act '+(closed?'closed':'')+'"><span class="swatch" style="background:'+specColour(a.act)+'"></span>'+esc(a.act)+(closed?'':' <span class="dot" title="confirmed">●</span>')+'</div>'+staff+'</div>';
+  }).join('')||'<span class="empty">—</span>';
+}
+/* Render Mud-Map rows grouped under quiet section headers, preserving row order
+   within each section. `mineId` highlights the viewer's own line when set. */
+function mmRowsHtml(rows,mineId){
+  var groups={};
+  rows.forEach(function(r){var sec=mmSection(r.loc);(groups[sec]=groups[sec]||[]).push(r);});
+  var html='';
+  MM_SECTIONS.forEach(function(sec){var list=groups[sec.id];if(!list||!list.length)return;
+    html+='<tr class="mm-section"><th colspan="3">'+esc(sec.label)+'<span class="mm-count">'+list.length+'</span></th></tr>';
+    list.forEach(function(r){
+      var quiet=mmQuietRow(r), mine=mineId!=null&&rowHasStaff(r,mineId);
+      html+='<tr class="mm-row'+(quiet?' mm-quiet':'')+(mine?' mm-mine':'')+'"><th>'+esc(r.loc)+'</th><td>'+mmCell(r.am,mineId)+'</td><td>'+mmCell(r.pm,mineId)+'</td></tr>';
+    });
+  });
+  return html;
+}
 function renderMap(){
   const d=fromIso(state.mapDate);
   const onL=onLeaveOn(state.mapDate);
-  let rowsHtml;
+  const everything=canSeeEverything();
+  const mineId=myConsultantId();
+  let rowsHtml, scopeNote='';
   if(isWeekend(d)){
     const _oc=oncallFor(d);
     const _ph=isPHrec(ON_CALL_SCHED[iso(d)]);
@@ -15932,12 +16073,30 @@ function renderMap(){
     rowsHtml=`<tr><td colspan="3" style="padding:0">${_summary}</td></tr>`;
   }else{
     const rows=mapForDate(d);
-    const cell=allocs=>allocs.map(a=>`<div class="alloc"><div class="act ${/CLOSED/.test(a.act)?'closed':''}"><span class="swatch" style="background:${specColour(a.act)}"></span>${esc(a.act)}${/CLOSED/.test(a.act)?'':' <span class="dot" title="confirmed">●</span>'}</div>${a.staff.map(s=>`<div class="stf"><span class="nm" onclick="openProfileByName('${esc(s.n)}')">${esc(s.n)}</span> <span class="gr">${s.g}</span></div>`).join('')}</div>`).join('')||'<span class="empty">—</span>';
-    rowsHtml=rows.map(r=>`<tr><th>${esc(r.loc)}</th><td>${cell(r.am)}</td><td>${cell(r.pm)}</td></tr>`).join('');
+    if(everything){
+      rowsHtml=mmRowsHtml(rows,everything&&mineId!=null?mineId:null); // full grid; still highlight own line if matched
+    }else if(mineId==null){
+      // regular user we can't match to a consultant → friendly empty state
+      rowsHtml=`<tr><td colspan="3"><div class="mm-empty"><div class="big">We couldn't match you to a consultant yet</div>Your personal Mud Map shows your own theatre &amp; clinic allocations. Ask an admin to link your account to your consultant record, then your day will appear here.</div></td></tr>`;
+      scopeNote=' · <span class="tag leave">Your roster</span>';
+    }else{
+      const mine=rows.filter(r=>rowHasStaff(r,mineId));
+      const meName=byId(mineId)?byId(mineId).full:'you';
+      if(!mine.length){
+        rowsHtml=`<tr><td colspan="3"><div class="mm-empty"><div class="big">Nothing rostered for you on this day</div>${esc(meName)} has no theatre or clinic allocation on ${longDate(d)}. Use Prev / Next to check another day, or see Leave for time off.</div></td></tr>`;
+      }else{
+        rowsHtml=mmRowsHtml(mine,mineId);
+      }
+      scopeNote=' · <span class="tag con">Your roster</span>';
+    }
   }
+  const termInfo=termForDate(d);
   view.innerHTML=`
-   <div class="row" style="margin-bottom:6px"><h1 style="margin:0">Mud Map</h1></div>
-   <p class="sub">${longDate(d)}${isWeekend(d)?'':` · <span class="tag con">Week ${weekLetter(d)}</span>`}${(()=>{const st=pubStatus(state.mapDate);return st==='final'?' · <span class="tag con">● Final — published by DA</span>':st==='draft'?' · <span class="tag leave">◐ Draft — provisional, may change</span>':isWeekend(d)?'':' · <span class="muted" style="font-size:12px">auto-generated preview</span>';})()}</p>
+   <div class="row" style="margin-bottom:6px;align-items:baseline;gap:10px;flex-wrap:wrap"><h1 style="margin:0">Mud Map</h1>
+     <span class="tag con" style="font-size:13px;padding:3px 11px" title="Training term">${esc(termInfo.name)}</span>
+     ${isWeekend(d)?'':`<span class="tag leave" style="font-size:13px;padding:3px 11px" title="4-week rotating cycle (Week A–D)">Week ${weekLetter(d)}</span>`}
+   </div>
+   <p class="sub">${longDate(d)}${termInfo.note?` · <span class="muted" style="font-size:12px">${esc(termInfo.name)} ${esc(termInfo.note)}</span>`:''}${scopeNote}${(()=>{const st=pubStatus(state.mapDate);return st==='final'?' · <span class="tag con">● Final — published by DA</span>':st==='draft'?' · <span class="tag leave">◐ Draft — provisional, may change</span>':isWeekend(d)?'':' · <span class="muted" style="font-size:12px">auto-generated preview</span>';})()}</p>
    <div class="row" style="margin-bottom:14px">
      <button class="btn ghost" onclick="shiftMap(-1)">← Prev</button>
      <input type="date" id="mapDate" value="${state.mapDate}" onchange="state.mapDate=this.value;render()">
@@ -15945,7 +16104,8 @@ function renderMap(){
      <span class="spacer"></span>
      <button class="btn ghost" onclick="state.mapDate=iso(TODAY);render()">Today</button>
    </div>
-   ${onL.length?`<div class="banner"><b>On leave this day:</b> ${onL.map(l=>esc(byId(l.staffId).full)+' ('+l.type.replace(' Leave','')+')').join(' · ')}</div>`:''}
+   ${(!everything&&mineId!=null)?`<p class="muted" style="font-size:12px;margin:-4px 0 12px">Showing <b>your</b> allocations. Duty Anaesthetists and admins see the full department map.</p>`:''}
+   ${onL.length&&everything?`<div class="banner"><b>On leave this day:</b> ${onL.map(l=>esc(byId(l.staffId).full)+' ('+l.type.replace(' Leave','')+')').join(' · ')}</div>`:''}
    <div class="card" style="overflow:auto"><table class="mm">
      <thead><tr><th>Location</th><th>AM</th><th>PM</th></tr></thead>
      <tbody>${rowsHtml}</tbody>
@@ -16433,7 +16593,7 @@ function boot(){
     if(!sbRole()){ renderRedeemGate(); return; }        // signed in, no role yet
   } else if(!SESSION){ renderLogin(); return; }          // offline fallback
   if(state.page==='admin'&&!isAdmin())state.page='dashboard';
-  if((state.page==='alloc'||state.page==='da')&&!canEditMap())state.page='dashboard';
+  if((state.page==='alloc'||state.page==='da'||state.page==='roster')&&!canEditMap())state.page='dashboard';
   renderNav();renderWho();render();
 }
 /* Shared-mode sign-in screen (config present): magic-link auth, then redeem a code. */
