@@ -14763,7 +14763,7 @@ function credsOf(id){return Object.keys(CRED_LABEL).filter(t=>hasCred(id,t));}
 const OVR_KEY='scgh_alloc_v1';
 let ALLOC_OVR=(()=>{try{return JSON.parse(localStorage.getItem(OVR_KEY))||{};}catch(e){return {};}})();
 function saveOvr(){localStorage.setItem(OVR_KEY,JSON.stringify(ALLOC_OVR));}
-function setAlloc(ds,loc,sh,con,act){ALLOC_OVR[ds]=ALLOC_OVR[ds]||{};ALLOC_OVR[ds][loc]=ALLOC_OVR[ds][loc]||{};ALLOC_OVR[ds][loc][sh]={con:con||'',act:act||''};saveOvr();toast('Allocation updated.');render();}
+function setAlloc(ds,loc,sh,con,act){if(!canEditMap()){toast('Mud Map editing is for Duty Anaesthetists (or super-admins) only.',true);return;}ALLOC_OVR[ds]=ALLOC_OVR[ds]||{};ALLOC_OVR[ds][loc]=ALLOC_OVR[ds][loc]||{};ALLOC_OVR[ds][loc][sh]={con:con||'',act:act||''};saveOvr();toast('Allocation updated.');render();}
 function applyOverrides(rows,ds){
   const o=ALLOC_OVR[ds]; if(!o)return rows;
   return rows.map(r=>{ if(!o[r.loc])return r; const nr={loc:r.loc,am:r.am,pm:r.pm};
@@ -14816,14 +14816,28 @@ function buildDraftFromPatterns(ds){
   return {rows,placed,knownCount,L,dow};
 }
 function daEnsure(ds){if(!PUB[ds]){const b=buildDraftFromPatterns(ds);PUB[ds]={status:'draft',rows:b.rows,updated:Date.now(),by:(SESSION&&SESSION.name)||'DA'};savePub();}return PUB[ds];}
-function daBuild(ds){const b=buildDraftFromPatterns(ds);PUB[ds]={status:(PUB[ds]&&PUB[ds].status)||'draft',rows:b.rows,updated:Date.now(),by:(SESSION&&SESSION.name)||'DA'};savePub();toast('Auto-built '+b.placed+' known consultant allocations (Week '+b.L+', '+b.dow+'). '+b.knownCount+' have verified patterns.');render();}
-function daSetCell(ds,loc,sh,con,act){const p=daEnsure(ds);const r=p.rows.find(x=>x.loc===loc);if(!r)return;
+function daBuild(ds){if(!canEditMap()){toast('Mud Map editing is for Duty Anaesthetists (or super-admins) only.',true);return;}const b=buildDraftFromPatterns(ds);PUB[ds]={status:(PUB[ds]&&PUB[ds].status)||'draft',rows:b.rows,updated:Date.now(),by:(SESSION&&SESSION.name)||'DA'};savePub();toast('Auto-built '+b.placed+' known consultant allocations (Week '+b.L+', '+b.dow+'). '+b.knownCount+' have verified patterns.');render();}
+function daSetCell(ds,loc,sh,con,act){if(!canEditMap()){toast('Mud Map editing is for Duty Anaesthetists (or super-admins) only.',true);return;}const p=daEnsure(ds);const r=p.rows.find(x=>x.loc===loc);if(!r)return;
   const cell=(r[sh]&&r[sh][0])||{act:'',staff:[]};const reg=(cell.staff||[]).filter(s=>s.g!=='Con');
   let staff;if(con){const s=CONSULTANTS.find(c=>c.last===con);staff=[{n:con,g:'Con',id:s?s.id:null}].concat(reg);}else{staff=reg;}
   r[sh]=[{act:(act!=null&&act!=='')?act:(cell.act||loc),staff}];p.updated=Date.now();p.by=(SESSION&&SESSION.name)||'DA';savePub();render();}
-function daPublish(ds,status){const p=daEnsure(ds);p.status=status;p.updated=Date.now();p.by=(SESSION&&SESSION.name)||'DA';savePub();toast(status==='final'?'Mud Map PUBLISHED as final.':'Saved as draft — staff can now preview it.');render();}
-function daUnpublish(ds){delete PUB[ds];savePub();toast('Unpublished — reverted to auto-generated preview.');render();}
-function canDA(){if(isAdmin())return true;if(!SESSION)return false;return SESSION.staffId!=null&&hasCred(SESSION.staffId,'da');}
+function daPublish(ds,status){if(!canEditMap()){toast('Publishing the Mud Map is for Duty Anaesthetists (or super-admins) only.',true);return;}const p=daEnsure(ds);p.status=status;p.updated=Date.now();p.by=(SESSION&&SESSION.name)||'DA';savePub();toast(status==='final'?'Mud Map PUBLISHED as final.':'Saved as draft — staff can now preview it.');render();}
+function daUnpublish(ds){if(!canEditMap()){toast('Mud Map editing is for Duty Anaesthetists (or super-admins) only.',true);return;}delete PUB[ds];savePub();toast('Unpublished — reverted to auto-generated preview.');render();}
+/* ===== Duty Anaesthetist (DA) capability — a per-ACCOUNT permission flag, SEPARATE
+   from the user<admin<super tier, and DIFFERENT from the "Duty Anaesthetist" row in
+   the Mud Map. Capability to create / edit / draft / publish / reassign the Mud Map
+   = (member has the DA flag) OR (member is super). A plain user who is a DA can
+   publish; an admin who is NOT a DA is strictly view-only on the Mud Map. The real
+   guard is server-side (can_publish_map() RLS + set_member_duty RPC); this UI gating
+   sits on top. ===== */
+function isDuty(){
+  if(sbReady())return !!(SB_MEMBER&&SB_MEMBER.active&&SB_MEMBER.is_duty); // server-authoritative
+  // offline localStorage fallback: account-level DA flag, or linked-staff 'da' credential
+  return !!(SESSION&&(SESSION.isDA||(SESSION.staffId!=null&&hasCred(SESSION.staffId,'da'))));
+}
+function canEditMap(){return isSuper()||isDuty();}
+/* DA Desk visibility & Mud-Map publishing use the same capability. Kept as canDA() for back-compat. */
+function canDA(){return canEditMap();}
 function mapForDate(d){const ds=iso(d);if(PUB[ds]&&PUB[ds].rows&&PUB[ds].rows.length)return PUB[ds].rows;return mapGen(d);}
 function mapGen(d){
   if(REAL_DAYS[iso(d)]) return applyOverrides(REAL_DAYS[iso(d)], iso(d));
@@ -14920,7 +14934,7 @@ let state={page:'dashboard', mapDate:iso(TODAY), calMonth:TODAY.getMonth(), calY
 function toast(msg,bad){const t=document.getElementById('toast');t.textContent=msg;t.className='notice show'+(bad?' bad':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='notice',3200);}
 
 const PAGES=[['dashboard','Dashboard'],['mudmap','Mud Map'],['da','DA Desk'],['theatre','By Theatre'],['person','By Person'],['oncall','On Call'],['leave','Leave'],['roster','Roster Builder'],['reports','Reports'],['messages','Messages'],['staff','Staff'],['alloc','Allocations'],['admin','Admin'],['account','My Account']];
-function visiblePages(){return PAGES.filter(([k])=>{ if(k==='admin'||k==='alloc')return isAdmin(); if(k==='da')return canDA(); return true; });}
+function visiblePages(){return PAGES.filter(([k])=>{ if(k==='admin')return isAdmin(); if(k==='alloc'||k==='da')return canEditMap(); return true; });}
 function renderNav(){
   document.getElementById('nav').innerHTML=visiblePages().map(([k,l])=>`<button class="${state.page===k?'active':''}" onclick="go('${k}')">${l}</button>`).join('');
 }
@@ -14937,7 +14951,7 @@ function renderWho(){
   who.innerHTML=`${act}<span class="tag ${isAdmin()?'leave':'con'}">${roleLabel(SESSION.role)}</span> <span style="margin:0 8px">${esc(SESSION.name||SESSION.username)}</span> <button class="btn ghost" style="padding:5px 11px" onclick="logout()">Log out</button>`;
   if(isAdmin()){const sel=document.getElementById('userSel');sel.innerHTML=activeStaff().slice().sort((a,b)=>a.last.localeCompare(b.last)).map(s=>`<option value="${s.id}" ${s.id===CURRENT?'selected':''}>${s.full}</option>`).join('');sel.onchange=e=>{CURRENT=+e.target.value;localStorage.setItem(UKEY,CURRENT);render();};}
 }
-function go(p){if((p==='admin'||p==='alloc')&&!isAdmin()){toast('Admins only.',true);return;}if(p==='da'&&!canDA()){toast('Duty Anaesthetists only.',true);return;}state.page=p;renderNav();render();window.scrollTo(0,0);}
+function go(p){if(p==='admin'&&!isAdmin()){toast('Admins only.',true);return;}if((p==='alloc'||p==='da')&&!canEditMap()){toast('Mud Map editing is for Duty Anaesthetists (or super-admins) only.',true);return;}state.page=p;renderNav();render();window.scrollTo(0,0);}
 
 function esc(s){return (''+s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
 
@@ -15019,11 +15033,14 @@ function renderAdmin(){
    <div class="card pad" style="margin-bottom:18px">
      <div class="row"><h3 style="margin:0">Members &amp; invites <span class="muted" style="font-size:12px">(shared · server-enforced)</span></h3><span class="spacer"></span><span class="muted">${SB_MEMBERS.filter(m=>m.active).length} active · ${SB_INVITES.length} pending</span></div>
      ${isAdmin()?`
-     <table class="list" style="margin-top:10px"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th style="text-align:right">Manage</th></tr></thead><tbody>
+     <table class="list" style="margin-top:10px"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th style="text-align:center" title="Duty Anaesthetist — may create/edit/publish the Mud Map">Duty Anaes</th><th style="text-align:right">Manage</th></tr></thead><tbody>
      ${SB_MEMBERS.filter(m=>m.active).map(m=>{const canManage=(ROLE_RANK[m.role]||1)<=myRank()&&m.auth_id!==(SB_USER&&SB_USER.id);
        const roleCell=canManage?`<select class="search" style="font-size:12px;padding:4px 6px" onchange="sbSetMemberRole('${m.id}',this.value)"><option value="user" ${m.role==='user'?'selected':''}>User</option><option value="admin" ${m.role==='admin'?'selected':''}>Admin</option>${isSuper()?`<option value="super" ${m.role==='super'?'selected':''}>Super-admin</option>`:''}</select>`:`<span class="tag con">${roleLabel(m.role)}</span>`;
-       return `<tr><td>${esc(m.name||'—')}${m.auth_id===(SB_USER&&SB_USER.id)?' <span class="muted">(you)</span>':''}</td><td>${esc(m.email||'—')}</td><td>${roleCell}</td><td style="text-align:right">${canManage?`<a onclick="sbRevokeMember('${m.id}')">remove</a>`:'<span class="muted">—</span>'}</td></tr>`;}).join('')}
+       const daOn=!!m.is_duty||m.role==='super';
+       const daCell=`<input type="checkbox" ${m.is_duty?'checked':''} ${m.role==='super'?'title="Super-admins can always publish the Mud Map"':'title="Toggle Duty Anaesthetist (Mud Map publishing) access"'} onclick="sbSetMemberDuty('${m.id}',this.checked)"> ${daOn?'<span class="tag leave">DA</span>':''}`;
+       return `<tr><td>${esc(m.name||'—')}${m.auth_id===(SB_USER&&SB_USER.id)?' <span class="muted">(you)</span>':''}</td><td>${esc(m.email||'—')}</td><td>${roleCell}</td><td style="text-align:center">${daCell}</td><td style="text-align:right">${canManage?`<a onclick="sbRevokeMember('${m.id}')">remove</a>`:'<span class="muted">—</span>'}</td></tr>`;}).join('')}
      </tbody></table>
+     <p class="muted" style="font-size:12px;margin-top:6px">A <b>Duty Anaesthetist (DA)</b> may create, edit, draft, publish and reassign the Mud Map — this is a per-account flag, separate from the admin tier (a plain user can be a DA). Admins who are not DAs can manage members but are view-only on the Mud Map. Super-admins can always publish.</p>
      ${SB_INVITES.length?`<h4 style="margin:16px 0 8px">Pending invite codes</h4>
      <table class="list"><thead><tr><th>Code</th><th>Role</th><th>Locked to</th><th>Expires</th><th style="text-align:right">Manage</th></tr></thead><tbody>
      ${SB_INVITES.map(c=>`<tr><td><b>${esc(c.code)}</b></td><td>${roleLabel(c.role_granted)}</td><td>${c.email_lock?('🔒 '+esc(c.email_lock)):'<span class="muted">anyone</span>'}</td><td>${c.expires_at?esc(String(c.expires_at).slice(0,10)):'<span class="muted">never</span>'}</td><td style="text-align:right">${(ROLE_RANK[c.role_granted]||1)<=myRank()?`<a onclick="sbCancelInvite('${c.id}')">cancel</a>`:'<span class="muted">—</span>'}</td></tr>`).join('')}
@@ -15041,13 +15058,16 @@ function renderAdmin(){
    </div>`:`
    <div class="card pad" style="margin-bottom:18px">
      <div class="row"><h3 style="margin:0">Accounts &amp; invites <span class="muted" style="font-size:12px">(per-browser · offline)</span></h3><span class="spacer"></span><span class="muted">${ACCOUNTS.filter(a=>a.status==='active').length} active · ${ACCOUNTS.filter(a=>a.status==='invited').length} pending</span></div>
-     <table class="list" style="margin-top:10px"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th style="text-align:right">Manage</th></tr></thead><tbody>
+     <table class="list" style="margin-top:10px"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th style="text-align:center" title="Duty Anaesthetist — may create/edit/publish the Mud Map">Duty Anaes</th><th>Status</th><th style="text-align:right">Manage</th></tr></thead><tbody>
      ${ACCOUNTS.map((a,i)=>{const canManage=(ROLE_RANK[a.role]||1)<=myRank()&&a.username!==(SESSION&&SESSION.username);
        const roleCell=canManage&&a.status==='active'?`<select class="search" style="font-size:12px;padding:4px 6px" onchange="setRole(${i},this.value)"><option value="user" ${a.role==='user'?'selected':''}>User</option><option value="admin" ${a.role==='admin'?'selected':''}>Admin</option>${isSuper()?`<option value="super" ${a.role==='super'?'selected':''}>Super-admin</option>`:''}</select>`:`<span class="tag con">${roleLabel(a.role)}</span>`;
+       const daOn=!!a.isDA||a.role==='super';
+       const daCell=a.status==='active'?`<input type="checkbox" ${a.isDA?'checked':''} ${a.role==='super'?'title="Super-admins can always publish the Mud Map"':'title="Toggle Duty Anaesthetist (Mud Map publishing) access"'} onclick="setAccountDuty(${i},this.checked)"> ${daOn?'<span class="tag leave">DA</span>':''}`:'<span class="muted">—</span>';
        const lock=a.emailLock?` · 🔒 ${esc(a.email)}`:''; const exp=a.expiresAt?` · expires ${a.expiresAt}`:'';
        const status=a.status==='invited'?`<span class="tag leave">invited · code <b>${esc(a.inviteCode)}</b>${lock}${exp}</span>`:'<span class="tag con">active</span>';
-       return `<tr><td>${esc(a.name)}</td><td>${esc(a.username||'—')}</td><td>${roleCell}</td><td>${status}</td><td style="text-align:right">${canManage?`<a onclick="revokeAccount(${i})">${a.status==='invited'?'cancel':'remove'}</a>`:'<span class="muted">—</span>'}</td></tr>`;}).join('')}
+       return `<tr><td>${esc(a.name)}</td><td>${esc(a.username||'—')}</td><td>${roleCell}</td><td style="text-align:center">${daCell}</td><td>${status}</td><td style="text-align:right">${canManage?`<a onclick="revokeAccount(${i})">${a.status==='invited'?'cancel':'remove'}</a>`:'<span class="muted">—</span>'}</td></tr>`;}).join('')}
      </tbody></table>
+     <p class="muted" style="font-size:12px;margin-top:6px">A <b>Duty Anaesthetist (DA)</b> may create, edit, draft, publish and reassign the Mud Map — separate from the admin tier (a plain user can be a DA). Admins who are not DAs are view-only on the Mud Map; super-admins can always publish.</p>
      <h4 style="margin:16px 0 8px">Invite someone to join</h4>
      <div class="row" style="gap:8px;flex-wrap:wrap">
        <input class="search" id="invName" placeholder="Full name" style="min-width:150px">
@@ -16103,6 +16123,13 @@ async function sbCancelInvite(id){
   if(error){toast(error.message||'Could not cancel invite.',true);}
   await sbLoadMembers();render();
 }
+/* Mark/unmark a member as a Duty Anaesthetist (the is_duty flag). Server enforces
+   admin/super-only via the set_member_duty RPC; the toggle is shown to admins. */
+async function sbSetMemberDuty(id,on){
+  const {error}=await SB.rpc('set_member_duty',{p_member:id,p_is_duty:!!on});
+  if(error){toast(error.message||'Could not update Duty Anaesthetist access.',true);}
+  await sbLoadMembers();render();
+}
 async function sbLoad(){
   if(!sbReady())return;
   try{
@@ -16174,6 +16201,11 @@ function setRole(i,role){const a=ACCOUNTS[i];if(!a)return;
   if(a.role==='super'&&role!=='super'&&ACCOUNTS.filter(x=>x.role==='super'&&x.status==='active').length<=1){toast('At least one super-admin must remain.',true);return;}
   a.role=role;saveAccounts();render();
 }
+/* Offline fallback: mark/unmark an account as a Duty Anaesthetist (Mud Map publishing). */
+function setAccountDuty(i,on){const a=ACCOUNTS[i];if(!a)return;
+  if(!requireRank(ROLE_RANK.admin,'Only admins or super-admins can change Duty Anaesthetist access.'))return;
+  a.isDA=!!on;saveAccounts();toast('Duty Anaesthetist access '+(on?'granted to ':'removed from ')+(a.name||a.username||'member')+'.');render();
+}
 function removeAccount(i){return revokeAccount(i);} // back-compat
 function acceptInvite(code,username,password,email){const cc=(code||'').trim().toUpperCase();
   const a=ACCOUNTS.find(x=>x.status==='invited'&&x.inviteCode===cc);
@@ -16223,6 +16255,7 @@ function boot(){
     if(!sbRole()){ renderRedeemGate(); return; }        // signed in, no role yet
   } else if(!SESSION){ renderLogin(); return; }          // offline fallback
   if(state.page==='admin'&&!isAdmin())state.page='dashboard';
+  if((state.page==='alloc'||state.page==='da')&&!canEditMap())state.page='dashboard';
   renderNav();renderWho();render();
 }
 /* Shared-mode sign-in screen (config present): magic-link auth, then redeem a code. */
