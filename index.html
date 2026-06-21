@@ -145,7 +145,28 @@ table.list thead th{background:#f0f4f7;color:var(--muted);font-weight:600}
 .notice.bad{background:#9b2c2c}
 .search{border:1px solid var(--line);border-radius:9px;padding:9px 11px;background:#fff;min-width:220px}
 .staffcard{display:flex;align-items:center;gap:11px;padding:12px;border:1px solid var(--line);border-radius:11px;background:#fff}
-.avatar{width:38px;height:38px;border-radius:50%;background:var(--clin-l);color:var(--clin-d);display:grid;place-items:center;font-weight:600;flex:none}
+.avatar{width:38px;height:38px;border-radius:50%;background:var(--clin-l);color:var(--clin-d);display:grid;place-items:center;font-weight:600;flex:none;overflow:hidden;background-size:cover;background-position:center}
+.avatar img{width:100%;height:100%;object-fit:cover;border-radius:inherit}
+/* ===== Our Doctors directory ===== */
+.docgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;margin-top:6px}
+.doccard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 18px 18px;display:flex;flex-direction:column;align-items:center;text-align:center;cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;box-shadow:0 1px 2px rgba(16,42,67,.04)}
+.doccard:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(16,42,67,.13);border-color:#cfe0e4}
+.doccard:focus-visible{outline:2px solid var(--clin);outline-offset:2px}
+.docphoto{width:84px;height:84px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:28px;color:#fff;overflow:hidden;flex:none;box-shadow:0 3px 10px rgba(16,42,67,.16);margin-bottom:12px}
+.docphoto img{width:100%;height:100%;object-fit:cover}
+.docname{font-weight:700;font-size:15.5px;line-height:1.25;color:var(--ink)}
+.doctitle{color:var(--muted);font-size:12.5px;margin-top:3px}
+.docinterest{font-size:12.5px;color:var(--clin-d);margin-top:9px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.docbadges{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:11px;min-height:0}
+.docbadge{font-size:10.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:3px 9px;border-radius:999px}
+.docbadge.da{background:#fdecef;color:#b4234a}
+.docbadge.role{background:var(--clin-l);color:var(--clin-d)}
+.docbadge.cred{background:#eef4ea;color:#3d6b33}
+.docempty{color:var(--muted);font-size:12px;margin-top:9px;font-style:italic}
+.docbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+/* photo edit controls in profile */
+.photoedit{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.photoedit .btn{padding:7px 12px;font-size:12.5px}
 .banner{background:var(--clin-l);border:1px solid #cfe4e8;color:var(--clin-d);border-radius:11px;padding:12px 14px;font-size:13px;margin-bottom:18px}
 .nm{cursor:pointer;border-bottom:1px dotted #b9c6d0}
 .nm:hover{color:var(--clin)}
@@ -261,6 +282,84 @@ const REGISTRARS=STAFF.filter(s=>!CON_LAST.has(s.last.toLowerCase()));
 let _ACTIVE=null;
 function activeStaff(){if(_ACTIVE)return _ACTIVE;_ACTIVE=STAFF.filter(s=>ACTIVE_LAST.has(s.last.toLowerCase()));return (_ACTIVE.length?_ACTIVE:(_ACTIVE=STAFF));}
 function contactMobile(s){const c=CONTACT_MOB[s.last.toLowerCase()];return c?c.mobile:null;}
+
+/* ===================== Duty Anaesthetist (DA) seed =====================
+   DERIVED, not invented: parsed from the 305 weekday Mud Maps in REAL_DAYS
+   (last ~12 months of live extractions). For every day the person allocated to
+   the "Duty Anaesthetist" row was tallied; the distinct set below is every
+   consultant who served as DA, with a day count. Each is mapped to the
+   firstname.lastname@health.wa.gov.au email (seed_people.sql where present,
+   else the same pattern from the active contact list). This pre-assigns the
+   DA capability flag (is_duty) offline so the DA badge shows for them, and is
+   the single source of truth for the idempotent Supabase duty_seed SQL. */
+const DA_SEED=[
+  {last:"HOGAN",first:"Bridget",email:"bridget.hogan@health.wa.gov.au",days:61},
+  {last:"SCHMIDT",first:"Markus",email:"markus.schmidt@health.wa.gov.au",days:47},
+  {last:"ROGERSON",first:"Tania",email:"tania.rogerson@health.wa.gov.au",days:39},
+  {last:"GODDARD",first:"Cat",email:"cat.goddard@health.wa.gov.au",days:37},
+  {last:"GARDNER",first:"Andrew",email:"andrew.gardner@health.wa.gov.au",days:35},
+  {last:"MATZELLE",first:"Shannon",email:"shannon.matzelle@health.wa.gov.au",days:32},
+  {last:"QUINN",first:"Colm",email:"colm.quinn@health.wa.gov.au",days:32},
+  {last:"LIM",first:"Barry",email:"barry.lim@health.wa.gov.au",days:29},
+  {last:"RUSSELL",first:"Twain",email:"twain.russell@health.wa.gov.au",days:25},
+  {last:"ANEJA",first:"Harmeet",email:"harmeet.aneja@health.wa.gov.au",days:25},
+  {last:"BOZIC",first:"Bojan",email:"bojan.bozic@health.wa.gov.au",days:21},
+  {last:"HICKEY",first:"Jeremy",email:"jeremy.hickey@health.wa.gov.au",days:20},
+  {last:"JOSEPHSON",first:"Mark",email:"mark.josephson@health.wa.gov.au",days:19},
+  {last:"KUROWSKI",first:"Irina",email:"irina.kurowski@health.wa.gov.au",days:17},
+  {last:"WALLMAN",first:"Damien",email:"damien.wallman@health.wa.gov.au",days:16},
+  {last:"PALUMBO",first:"Angela",email:"angela.palumbo@health.wa.gov.au",days:10},
+  {last:"TRAVIS",first:"Katariina",email:"katariina.travis@health.wa.gov.au",days:9},
+  {last:"LAMB",first:"Steve",email:"steve.lamb@health.wa.gov.au",days:8},
+  {last:"BRBICH",first:"Matthew",email:"matthew.brbich@health.wa.gov.au",days:7},
+  {last:"CHOO",first:"Lip",email:"lip.choo@health.wa.gov.au",days:6},
+  {last:"PADMAN",first:"Dani",email:"dani.padman@health.wa.gov.au",days:5},
+  {last:"MITCHELL",first:"Chris",email:"chris.mitchell@health.wa.gov.au",days:4},
+  {last:"PAPAELIAS",first:"Simon",email:"simon.papaelias@health.wa.gov.au",days:4},
+  {last:"SHERWIN",first:"Darren",email:"darren.sherwin@health.wa.gov.au",days:4},
+  {last:"TAN",first:"Christine",email:"christine.tan@health.wa.gov.au",days:3},
+  {last:"HALVEY",first:"Ed",email:"ed.halvey@health.wa.gov.au",days:3},
+  {last:"MONAGHAN",first:"Rebecca",email:"rebecca.monaghan@health.wa.gov.au",days:3},
+  {last:"MAJEDI",first:"Max",email:"max.majedi@health.wa.gov.au",days:2},
+  {last:"WENZEL",first:"Dorian",email:"dorian.wenzel@health.wa.gov.au",days:2},
+  {last:"LILLYWHITE",first:"Sam",email:"sam.lillywhite@health.wa.gov.au",days:2},
+  {last:"NASH",first:"Michael",email:"michael.nash@health.wa.gov.au",days:2},
+  {last:"ELLYARD",first:"Daniel",email:"daniel.ellyard@health.wa.gov.au",days:2},
+  {last:"JOHNSTON",first:"Hamish",email:"hamish.johnston@health.wa.gov.au",days:1},
+  {last:"SMIT",first:"Marli",email:"marli.smit@health.wa.gov.au",days:1},
+  {last:"SILBERSTEIN",first:"Ilan",email:"ilan.silberstein@health.wa.gov.au",days:1},
+  {last:"KENNEDY",first:"Chris",email:"chris.kennedy@health.wa.gov.au",days:1},
+  {last:"HENNESSY",first:"Brien",email:"brien.hennessy@health.wa.gov.au",days:1},
+  {last:"WESSELS",first:"Kate",email:"kate.wessels@health.wa.gov.au",days:1},
+  {last:"JERVIS",first:"Lee",email:"lee.jervis@health.wa.gov.au",days:1},
+  {last:"CURRIGAN",first:"Dale",email:"dale.currigan@health.wa.gov.au",days:1},
+  {last:"ELLIS",first:"Clinton",email:"clinton.ellis@health.wa.gov.au",days:1},
+  {last:"LAW",first:"Dave",email:"dave.law@health.wa.gov.au",days:1},
+  {last:"YUSOFF",first:"Reza",email:"reza.yusoff@health.wa.gov.au",days:1}
+];
+const DA_LAST_SET=new Set(DA_SEED.map(d=>d.last.toLowerCase()));
+const DA_EMAIL_SET=new Set(DA_SEED.map(d=>d.email.toLowerCase()));
+const DA_DAYS=(()=>{const m={};DA_SEED.forEach(d=>m[d.last.toLowerCase()]=d.days);return m;})();
+/* Resolve each DA_SEED entry to exactly ONE consultant. Most surnames are unique
+   among consultants; where a surname is shared (e.g. two Goddards), match on first
+   name (exact → nickname/prefix → initial) so only the rostered DA is flagged. */
+const DA_STAFF_IDS=(()=>{
+  const set=new Set();const norm=x=>String(x||'').toLowerCase().replace(/[^a-z]/g,'');
+  DA_SEED.forEach(d=>{
+    const cands=CONSULTANTS.filter(s=>s.last.toLowerCase()===d.last.toLowerCase());
+    if(!cands.length)return;
+    if(cands.length===1){set.add(cands[0].id);return;}
+    const df=norm(d.first);
+    const best=cands.find(s=>norm(s.first)===df)
+      ||cands.find(s=>{const sf=norm(s.first);return sf&&df&&(sf.startsWith(df)||df.startsWith(sf));})
+      ||cands.find(s=>norm(s.first)[0]===df[0])||cands[0];
+    set.add(best.id);
+  });
+  return set;
+})();
+/* Offline DA test (server is authoritative in shared mode). */
+function isDutyStaff(id){return DA_STAFF_IDS.has(id);}
+function dutyDaysOf(id){const s=byId(id);return (s&&DA_STAFF_IDS.has(id))?(DA_DAYS[s.last.toLowerCase()]||0):0;}
 
 /* specialty colour map */
 const SPEC_COLOUR = {Breast:'#8b5cf6',Plastics:'#ec4899',Vascular:'#ef4444',Urology:'#3b82f6',
@@ -14832,8 +14931,9 @@ function daUnpublish(ds){if(!canEditMap()){toast('Mud Map editing is for Duty An
    sits on top. ===== */
 function isDuty(){
   if(sbReady())return !!(SB_MEMBER&&SB_MEMBER.active&&SB_MEMBER.is_duty); // server-authoritative
-  // offline localStorage fallback: account-level DA flag, or linked-staff 'da' credential
-  return !!(SESSION&&(SESSION.isDA||(SESSION.staffId!=null&&hasCred(SESSION.staffId,'da'))));
+  // offline localStorage fallback: account-level DA flag, linked-staff 'da' credential,
+  // or the consultant is in the DA_SEED derived from the last year of Mud Maps.
+  return !!(SESSION&&(SESSION.isDA||(SESSION.staffId!=null&&(hasCred(SESSION.staffId,'da')||isDutyStaff(SESSION.staffId)))));
 }
 function canEditMap(){return isSuper()||isDuty();}
 /* DA Desk visibility & Mud-Map publishing use the same capability. Kept as canDA() for back-compat. */
@@ -14880,6 +14980,22 @@ function profileData(id){return PROFILES[id]||{};}
 function setProfileField(id,field,val){PROFILES[id]=PROFILES[id]||{};const v=(val||'').trim();if(v)PROFILES[id][field]=v;else delete PROFILES[id][field];saveProfiles();}
 function profileTitle(s){return s.isCon?'Consultant Anaesthetist':(s.grade?('Registrar / Fellow · '+s.grade):'Registrar / Staff');}
 function canEditProfile(id){return isAdmin()||(SESSION&&SESSION.staffId===id);}
+/* Tasteful, deterministic initials-avatar colour from the name (no stock photos). */
+function avatarHue(s){const str=(s.full||s.last||'');let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))>>>0;return h%360;}
+function avatarBg(s){const hue=avatarHue(s);return `linear-gradient(135deg,hsl(${hue} 52% 52%),hsl(${(hue+38)%360} 56% 42%))`;}
+function staffInitials(s){return ((s.first?s.first[0]:'')+(s.last?s.last[0]:'')).toUpperCase();}
+/* Avatar markup: real photo if the person uploaded/pasted one, else a coloured
+   initials circle. `cls` is the wrapper class (.avatar small, .docphoto large). */
+function avatarMarkup(s,cls){const pd=profileData(s.id);const ph=pd.photo;
+  if(ph)return `<div class="${cls}"><img src="${esc(ph)}" alt="${esc(s.full)}"></div>`;
+  return `<div class="${cls}" style="background:${avatarBg(s)}">${esc(staffInitials(s))}</div>`;}
+/* Self-service photo upload → stored as a data URL in the profile (per browser;
+   syncs to Supabase profiles in shared mode). Capped so localStorage stays sane. */
+function setProfilePhotoFile(id,input){const f=input&&input.files&&input.files[0];if(!f)return;
+  if(!/^image\//.test(f.type)){toast('Please choose an image file.',true);return;}
+  if(f.size>3*1024*1024){toast('Image is large (>3MB) — please choose a smaller one.',true);return;}
+  const r=new FileReader();r.onload=function(){setProfileField(id,'photo',r.result);toast('Photo updated.');openProfile(id);};r.onerror=function(){toast('Could not read that image.',true);};r.readAsDataURL(f);}
+function clearProfilePhoto(id){setProfileField(id,'photo','');toast('Photo removed.');openProfile(id);}
 function openProfile(id){
   const s=byId(id); if(!s)return; const pd=profileData(id);
   const init=((s.first?s.first[0]:'')+s.last[0]).toUpperCase();
@@ -14891,17 +15007,37 @@ function openProfile(id){
   const pc=pd.card||{};
   const fld=(label,field,val,ph)=>`<div class="k">${label}</div><div>${editable?`<input class="search" style="width:100%;font-size:13px" value="${esc(val||'')}" placeholder="${ph||''}" onchange="setProfileField(${id},'${field}',this.value)">`:(val?esc(val):'<span class="muted">—</span>')}</div>`;
   const contact=(mob||email)?`<div class="contact">${mob?`<a class="call" href="tel:+61${String(mob).replace(/\s/g,'').slice(1)}">📞 ${esc(mob)}</a>`:''}${email?`<a href="mailto:${esc(email)}">✉ ${esc(email)}</a>`:''}</div>`:(editable?'':'<p class="muted" style="font-size:12px;margin:0 0 8px">No contact details on file.</p>');
+  const isDA=isDutyStaff(id);
+  const interests=pd.interests||'';
+  const bio=pd.bio||'';
   document.getElementById('modalBox').innerHTML=`
-    <div class="hd"><div class="avatar">${esc(init)}</div>
-      <div><div style="font-weight:700;font-size:17px">${esc(s.full)}</div><div class="muted">${esc(profileTitle(s))}</div></div>
+    <div class="hd">${avatarMarkup(s,'avatar')}
+      <div><div style="font-weight:700;font-size:17px">${esc(s.full)} ${isDA?'<span class="docbadge da" title="Duty Anaesthetist (derived from the last year of Mud Maps)">DA</span>':''}</div><div class="muted">${esc(profileTitle(s))}</div>${interests&&!editable?`<div style="font-size:12.5px;color:var(--clin-d);margin-top:3px">${esc(interests)}</div>`:''}</div>
       <button class="x" onclick="closeProfile()">×</button></div>
     <div class="bd">
       ${contact}
       <div class="kv">
         <div class="k">Role</div><div>${esc(s.role)}${s.grade?' · '+esc(s.grade):''}</div>
         <div class="k">Annual leave</div><div>${rem}/${s.entitlement} days remaining</div>
+        ${isDA?`<div class="k">Duty Anaesthetist</div><div><span class="docbadge da">DA</span> <span class="muted" style="font-size:12px">${dutyDaysOf(id)} day${dutyDaysOf(id)===1?'':'s'} on the Mud Map (last 12 mo)</span></div>`:''}
         ${credsOf(s.id).length?`<div class="k">Credentialed</div><div>${credsOf(s.id).map(t=>`<span class="chip" style="background:#eaf1f3;color:var(--clin-d)">${CRED_LABEL[t]}</span>`).join(' ')}</div>`:''}
       </div>
+      <div class="pcard"><h4>About</h4>
+        <div class="k">Special interests / sub-specialty</div>
+        <div>${editable?`<input class="search" style="width:100%;font-size:13px" value="${esc(interests)}" placeholder="e.g. Regional anaesthesia, Obstetrics, Education" onchange="setProfileField(${id},'interests',this.value)">`:(interests?esc(interests):'<span class="muted">Not set yet.</span>')}</div>
+        <div class="k" style="margin-top:10px">Short bio</div>
+        <div>${editable?`<textarea class="search" style="width:100%;min-height:64px;font-size:13px" placeholder="A few words about yourself (optional)…" onchange="setProfileField(${id},'bio',this.value)">${esc(bio)}</textarea>`:(bio?esc(bio):'<span class="muted">No bio yet.</span>')}</div>
+      </div>
+      ${editable?`<div class="pcard"><h4>Profile photo</h4>
+        <div class="photoedit">
+          <button class="btn ghost" onclick="document.getElementById('photoFile${id}').click()">Upload photo</button>
+          <input id="photoFile${id}" type="file" accept="image/*" style="display:none" onchange="setProfilePhotoFile(${id},this)">
+          ${pd.photo?`<button class="btn ghost" onclick="clearProfilePhoto(${id})">Remove</button>`:''}
+        </div>
+        <div class="k" style="margin-top:10px">…or paste an image URL</div>
+        <div><input class="search" style="width:100%;font-size:13px" value="${esc((pd.photo&&/^https?:/.test(pd.photo))?pd.photo:'')}" placeholder="https://…" onchange="setProfileField(${id},'photo',this.value);openProfile(${id})"></div>
+        <p class="muted" style="font-size:11px;margin:8px 0 0">Your photo is private to this department directory. Initials are shown until you add one.</p>
+      </div>`:''}
       ${editable?`<div class="pcard"><h4>Edit details</h4><div class="kv">
           ${fld('Mobile','mobile',pd.mobile||cm||'','04xx xxx xxx')}
           ${fld('Email','email',email,'name@health.wa.gov.au')}
@@ -14929,11 +15065,11 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeProfile();});
 
 /* ===================== rendering ===================== */
 const view=document.getElementById('view');
-let state={page:'dashboard', mapDate:iso(TODAY), calMonth:TODAY.getMonth(), calYear:TODAY.getFullYear(), staffQ:''};
+let state={page:'dashboard', mapDate:iso(TODAY), calMonth:TODAY.getMonth(), calYear:TODAY.getFullYear(), staffQ:'', docQ:''};
 
 function toast(msg,bad){const t=document.getElementById('toast');t.textContent=msg;t.className='notice show'+(bad?' bad':'');clearTimeout(t._t);t._t=setTimeout(()=>t.className='notice',3200);}
 
-const PAGES=[['dashboard','Dashboard'],['mudmap','Mud Map'],['da','DA Desk'],['theatre','By Theatre'],['person','By Person'],['oncall','On Call'],['leave','Leave'],['roster','Roster Builder'],['reports','Reports'],['messages','Messages'],['staff','Staff'],['alloc','Allocations'],['admin','Admin'],['account','My Account']];
+const PAGES=[['dashboard','Dashboard'],['mudmap','Mud Map'],['da','DA Desk'],['theatre','By Theatre'],['person','By Person'],['oncall','On Call'],['leave','Leave'],['roster','Roster Builder'],['reports','Reports'],['messages','Messages'],['doctors','Our Doctors'],['staff','Staff'],['alloc','Allocations'],['admin','Admin'],['account','My Account']];
 function visiblePages(){return PAGES.filter(([k])=>{ if(k==='admin')return isAdmin(); if(k==='alloc'||k==='da')return canEditMap(); return true; });}
 function renderNav(){
   document.getElementById('nav').innerHTML=visiblePages().map(([k,l])=>`<button class="${state.page===k?'active':''}" onclick="go('${k}')">${l}</button>`).join('');
@@ -14965,6 +15101,7 @@ function _render(){
   if(state.page==='oncall')return renderOncall();
   if(state.page==='leave')return renderLeave();
   if(state.page==='staff')return renderStaff();
+  if(state.page==='doctors')return renderDoctors();
   if(state.page==='theatre')return renderTheatre();
   if(state.page==='person')return renderPerson();
   if(state.page==='roster')return renderRoster();
@@ -16052,9 +16189,50 @@ function renderStaffList(){
   const c=document.getElementById('cnt');if(c)c.textContent=list.length+' shown';
   el.innerHTML='<div class="grid3">'+list.slice(0,300).map(s=>{
     const mob=contactMobile(s);
-    const init=(s.first?s.first[0]:'')+s.last[0];
-    return `<div class="staffcard" style="cursor:pointer" onclick="openProfile(${s.id})"><div class="avatar">${esc(init.toUpperCase())}</div><div style="min-width:0"><div style="font-weight:600">${esc(s.full)}</div><div class="muted" style="font-size:12px">${s.role}${mob?' · '+esc(mob):''} · view profile</div></div></div>`;
+    return `<div class="staffcard" style="cursor:pointer" onclick="openProfile(${s.id})">${avatarMarkup(s,'avatar')}<div style="min-width:0"><div style="font-weight:600">${esc(s.full)}</div><div class="muted" style="font-size:12px">${s.role}${mob?' · '+esc(mob):''} · view profile</div></div></div>`;
   }).join('')+'</div>'+(list.length>300?`<p class="muted" style="margin-top:12px">Showing first 300 of ${list.length}. Refine your search to see more.</p>`:'');
+}
+
+/* ===================== Our Doctors — consultant directory ===================== */
+/* A polished, responsive grid of every consultant: profile photo (or a tasteful
+   coloured initials avatar), name, title, real special-interests if set, DA badge
+   for the derived Duty Anaesthetists, and a role badge. Behind the sign-in gate.
+   Real data only — blank fields show clean placeholders, no invented bios. */
+function renderDoctors(){
+  const q=(state.docQ||'').toLowerCase();
+  const all=CONSULTANTS.slice().sort((a,b)=>a.last.localeCompare(b.last));
+  const daCount=all.filter(s=>isDutyStaff(s.id)).length;
+  view.innerHTML=`<h1>Our Doctors</h1>
+   <p class="sub">${all.length} consultant anaesthetists${daCount?` · ${daCount} duty anaesthetists`:''}. Tap a card to view a profile — add your own photo & special interests from <b>My Account → Edit my profile</b>.</p>
+   <div class="docbar"><input class="search" placeholder="Search by name…" value="${esc(state.docQ||'')}" oninput="state.docQ=this.value;renderDoctorGrid()"><span class="muted" id="docCnt"></span></div>
+   <div id="docGrid"></div>`;
+  renderDoctorGrid();
+}
+function renderDoctorGrid(){
+  const q=(state.docQ||'').toLowerCase();
+  const list=CONSULTANTS.filter(s=>s.full.toLowerCase().includes(q)||(profileData(s.id).interests||'').toLowerCase().includes(q))
+    .sort((a,b)=>a.last.localeCompare(b.last));
+  const el=document.getElementById('docGrid');if(!el)return;
+  const c=document.getElementById('docCnt');if(c)c.textContent=list.length+(list.length===1?' doctor':' doctors');
+  if(!list.length){el.innerHTML='<p class="muted" style="margin-top:8px">No doctors match that search.</p>';return;}
+  el.innerHTML='<div class="docgrid">'+list.map(s=>{
+    const pd=profileData(s.id);
+    const interests=pd.interests||'';
+    const isDA=isDutyStaff(s.id);
+    const creds=credsOf(s.id);
+    const badges=[
+      `<span class="docbadge role">Consultant</span>`,
+      isDA?`<span class="docbadge da" title="Duty Anaesthetist">DA</span>`:'',
+      creds.map(t=>`<span class="docbadge cred">${esc(CRED_LABEL[t]||t)}</span>`).join('')
+    ].join('');
+    return `<div class="doccard" tabindex="0" role="button" aria-label="${esc(s.full)} — view profile" onclick="openProfile(${s.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openProfile(${s.id});}">
+      ${avatarMarkup(s,'docphoto')}
+      <div class="docname">${esc(s.full)}</div>
+      <div class="doctitle">Consultant Anaesthetist</div>
+      ${interests?`<div class="docinterest">${esc(interests)}</div>`:'<div class="docempty">No special interests listed</div>'}
+      <div class="docbadges">${badges}</div>
+    </div>`;
+  }).join('')+'</div>';
 }
 
 /* ===================== boot ===================== */
